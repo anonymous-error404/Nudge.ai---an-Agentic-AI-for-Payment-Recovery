@@ -1,6 +1,6 @@
 /**
  * deliver_notification
- * Internal handler — NOT exposed to Claude as a tool.
+ * Internal handler — NOT exposed to AI as a tool.
  * Called by the MCP callback route when Agent 3 has written the final content
  * and the server relays it for actual delivery.
  */

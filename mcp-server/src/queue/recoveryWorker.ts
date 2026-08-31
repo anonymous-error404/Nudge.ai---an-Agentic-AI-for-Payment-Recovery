@@ -83,7 +83,7 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
       context,
       toolSchemas,
       async (tool, args) => {
-        // This callback is called each time Claude picks a tool
+        // This callback is called each time AI picks a tool
         return relayToolCallToMerchant(jobId, merchantCallbackUrl, tool, args);
       },
     );
@@ -103,6 +103,7 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
         failureCategory: context.failure_category,
         channel,
         amountBucket: context.amount_bucket,
+        orderDetails: context.order_details ?? null,
       });
 
       notificationContent = written.subject
@@ -171,7 +172,7 @@ export function startRecoveryWorker() {
     processRecoveryJob,
     {
       connection: redisConnection,
-      concurrency: 3, // max 3 Claude calls at a time
+      concurrency: 3, // max 3 AI calls at a time
     },
   );
 

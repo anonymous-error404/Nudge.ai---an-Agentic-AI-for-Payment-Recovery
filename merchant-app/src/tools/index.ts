@@ -2,7 +2,7 @@
  * Tool Registry
  *
  * Centralises:
- *  1. The JSON schemas sent to the MCP server (and on to Claude)
+ *  1. The JSON schemas sent to the MCP server (and on to AI)
  *  2. The executor functions called when the server relays a tool call back
  */
 
@@ -13,10 +13,10 @@ import { escalateToHumanSchema, executeEscalateToHuman } from "./escalateToHuman
 import { doNothingSchema, executeDoNothing } from "./doNothingTool";
 import { executeDeliverNotification } from "./deliverNotificationTool";
 
-// ─── Schemas sent to MCP server (these become Claude's tool list) ─────────────
+// ─── Schemas sent to MCP server (these become AI's tool list) ─────────────
 
 export const TOOL_SCHEMAS = [
-  queryFailureContextSchema,   // Claude should call this first to gather context
+  queryFailureContextSchema,   // AI should call this first to gather context
   sendNotificationSchema,
   retryPaymentSchema,
   escalateToHumanSchema,

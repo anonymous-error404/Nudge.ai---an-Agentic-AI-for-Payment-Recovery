@@ -1,25 +1,28 @@
 /**
  * query_failure_context tool
- * Returns enriched (but non-PII) context about a failure event for Claude to reason over.
- * Claude may call this before deciding which recovery action to take.
+ * Returns enriched (but non-PII) context about a failure event for AI to reason over.
+ * AI may call this before deciding which recovery action to take.
  */
 import { prisma } from "../lib/prismaClient";
 
 export const queryFailureContextSchema = {
-  name: "query_failure_context",
-  description:
-    "Fetches enriched context about a failed payment — order history, previous recovery attempts, " +
-    "customer payment behaviour — to help decide the best recovery strategy. Call this first if " +
-    "you need more information before choosing a recovery action.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      failure_event_id: {
-        type: "string",
-        description: "The merchant-side failure_event ID to query.",
+  type: "function" as const,
+  function: {
+    name: "query_failure_context",
+    description:
+      "Fetches enriched context about a failed payment — order history, previous recovery attempts, " +
+      "customer payment behaviour — to help decide the best recovery strategy. Call this first if " +
+      "you need more information before choosing a recovery action.",
+    parameters: {
+      type: "object" as const,
+      properties: {
+        failure_event_id: {
+          type: "string",
+          description: "The merchant-side failure_event ID to query.",
+        },
       },
+      required: ["failure_event_id"],
     },
-    required: ["failure_event_id"],
   },
 };
 

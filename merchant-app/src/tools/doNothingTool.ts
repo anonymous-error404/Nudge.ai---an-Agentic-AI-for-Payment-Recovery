@@ -1,28 +1,31 @@
 /**
  * do_nothing tool
  * Explicitly records that no recovery action should be taken.
- * Forces Claude to make an active choice rather than falling silent.
+ * Forces AI to make an active choice rather than falling silent.
  */
 
 export const doNothingSchema = {
-  name: "do_nothing",
-  description:
-    "Explicitly records that no automated recovery action should be taken for this failure. " +
-    "Use for fraud blocks, mandate revocations, or cases where any intervention would make things worse. " +
-    "This creates a clean audit trail of the non-action decision.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      payment_id: {
-        type: "string",
-        description: "The merchant-side payment ID.",
+  type: "function" as const,
+  function: {
+    name: "do_nothing",
+    description:
+      "Explicitly records that no automated recovery action should be taken for this failure. " +
+      "Use for fraud blocks, mandate revocations, or cases where any intervention would make things worse. " +
+      "This creates a clean audit trail of the non-action decision.",
+    parameters: {
+      type: "object" as const,
+      properties: {
+        payment_id: {
+          type: "string",
+          description: "The merchant-side payment ID.",
+        },
+        reason: {
+          type: "string",
+          description: "Why no recovery action should be taken.",
+        },
       },
-      reason: {
-        type: "string",
-        description: "Why no recovery action should be taken.",
-      },
+      required: ["payment_id", "reason"],
     },
-    required: ["payment_id", "reason"],
   },
 };
 

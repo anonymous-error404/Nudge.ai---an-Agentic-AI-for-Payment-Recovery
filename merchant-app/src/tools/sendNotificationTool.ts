@@ -5,29 +5,32 @@
  */
 
 export const sendNotificationSchema = {
-  name: "send_notification",
-  description:
-    "Sends a payment recovery nudge to the customer via the specified channel (SMS, email, or WhatsApp). " +
-    "Use for delayed recovery: insufficient funds, abandoned cart, do-not-honor bank declines.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      customer_id: {
-        type: "string",
-        description: "The merchant-side customer ID to notify.",
+  type: "function" as const,
+  function: {
+    name: "send_notification",
+    description:
+      "Sends a payment recovery nudge to the customer via the specified channel (SMS, email, or WhatsApp). " +
+      "Use for delayed recovery: insufficient funds, abandoned cart, do-not-honor bank declines.",
+    parameters: {
+      type: "object" as const,
+      properties: {
+        customer_id: {
+          type: "string",
+          description: "The merchant-side customer ID to notify.",
+        },
+        channel: {
+          type: "string",
+          enum: ["sms", "email", "whatsapp"],
+          description: "Delivery channel for the notification.",
+        },
+        template: {
+          type: "string",
+          description:
+            "Template key or free-text message hint. The notification writer agent will produce the final copy.",
+        },
       },
-      channel: {
-        type: "string",
-        enum: ["sms", "email", "whatsapp"],
-        description: "Delivery channel for the notification.",
-      },
-      template: {
-        type: "string",
-        description:
-          "Template key or free-text message hint. The notification writer agent will produce the final copy.",
-      },
+      required: ["customer_id", "channel", "template"],
     },
-    required: ["customer_id", "channel", "template"],
   },
 };
 

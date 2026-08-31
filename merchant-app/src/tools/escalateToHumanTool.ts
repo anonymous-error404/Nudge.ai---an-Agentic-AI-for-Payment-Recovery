@@ -5,24 +5,27 @@
 import { prisma } from "../lib/prismaClient";
 
 export const escalateToHumanSchema = {
-  name: "escalate_to_human",
-  description:
-    "Flags this failure event for manual merchant review instead of automated recovery. " +
-    "Use when: max retry attempts exceeded, fraud suspected, or the situation is ambiguous " +
-    "and automation would risk over-charging or harassing the customer.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      payment_id: {
-        type: "string",
-        description: "The merchant-side payment ID to escalate.",
+  type: "function" as const,
+  function: {
+    name: "escalate_to_human",
+    description:
+      "Flags this failure event for manual merchant review instead of automated recovery. " +
+      "Use when: max retry attempts exceeded, fraud suspected, or the situation is ambiguous " +
+      "and automation would risk over-charging or harassing the customer.",
+    parameters: {
+      type: "object" as const,
+      properties: {
+        payment_id: {
+          type: "string",
+          description: "The merchant-side payment ID to escalate.",
+        },
+        reason: {
+          type: "string",
+          description: "Why automated recovery should not proceed. This will appear in the merchant dashboard.",
+        },
       },
-      reason: {
-        type: "string",
-        description: "Why automated recovery should not proceed. This will appear in the merchant dashboard.",
-      },
+      required: ["payment_id", "reason"],
     },
-    required: ["payment_id", "reason"],
   },
 };
 

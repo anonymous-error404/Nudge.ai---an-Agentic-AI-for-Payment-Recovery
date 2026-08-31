@@ -5,7 +5,7 @@ const router = Router();
 
 /**
  * POST /mcp/tool-call
- * MCP server relays Claude's chosen tool — we execute it here.
+ * MCP server relays AI-chosen tool — we execute it here.
  */
 router.post(
   "/mcp/tool-call",
@@ -14,7 +14,7 @@ router.post(
 
 /**
  * POST /mcp/job-complete
- * MCP server notifies us Claude has finished — update merchant DB.
+ * MCP server notifies us AI has finished — update merchant DB.
  */
 router.post(
   "/mcp/job-complete",

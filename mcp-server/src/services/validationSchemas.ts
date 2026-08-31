@@ -7,21 +7,33 @@ export const RecoveryJobSchema = z.object({
   merchantCallbackUrl: z.string().url(),
   externalRef: z.string().min(1),
   context: z.object({
+    failure_event_id: z.string(),
+    customer_id: z.string(),
     failure_category: z.string(),
     amount_bucket: z.string(),
     attempt_count: z.number().int().min(0),
     days_since_failure: z.number().min(0),
     payment_method: z.string(),
     previous_actions: z.array(z.string()),
+    order_details: z.object({
+      order_id: z.string(),
+      product_name: z.string(),
+      product_description: z.string().optional(),
+      amount_rupees: z.number(),
+      currency: z.string(),
+    }).nullable(),
   }),
   toolSchemas: z.array(
     z.object({
-      name: z.string(),
-      description: z.string(),
-      input_schema: z.object({
-        type: z.literal("object"),
-        properties: z.record(z.any()),
-        required: z.array(z.string()).optional(),
+      type: z.literal("function"),
+      function: z.object({
+        name: z.string(),
+        description: z.string(),
+        parameters: z.object({
+          type: z.literal("object"),
+          properties: z.record(z.any()),
+          required: z.array(z.string()).optional(),
+        }),
       }),
     }),
   ),

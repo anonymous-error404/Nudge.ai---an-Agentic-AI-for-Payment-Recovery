@@ -2,23 +2,36 @@ import { ActionType, NotificationChannel, RecoveryOutcome } from "./enums";
 
 // ─── Inbound from merchant MCP client ────────────────────────────────────────
 
+/** Groq/OpenAI-style tool schema — used natively in the agent without conversion */
 export interface ToolSchema {
-  name: string;
-  description: string;
-  input_schema: {
-    type: "object";
-    properties: Record<string, { type: string; description?: string; enum?: string[] }>;
-    required?: string[];
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, { type: string; description?: string; enum?: string[] }>;
+      required?: string[];
+    };
   };
 }
 
 export interface FailureContext {
+  failure_event_id: string;   // real merchant-side ID — passed so AI can call query_failure_context correctly
+  customer_id: string;        // internal merchant customer ID — needed for notification tool calls (not PII)
   failure_category: string;
-  amount_bucket: string;
+  amount_bucket: string;      // kept for decision-rule risk bucketing
   attempt_count: number;
   days_since_failure: number;
   payment_method: string;
   previous_actions: string[];
+  order_details: {
+    order_id: string;
+    product_name: string;
+    product_description?: string;
+    amount_rupees: number;    // exact amount in INR (not paise)
+    currency: string;
+  } | null;
 }
 
 export interface RecoveryJobRequest {

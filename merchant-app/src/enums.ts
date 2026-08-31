@@ -96,7 +96,7 @@ export enum RecoveryType {
 }
 
 /**
- * The set of actions the orchestrator (and later Claude) can take.
+ * The set of actions the orchestrator (and later AI) can take.
  * Maps 1:1 to the MCP tool schemas in Section 5 of the system design doc.
  */
 export enum RecoveryActionType {

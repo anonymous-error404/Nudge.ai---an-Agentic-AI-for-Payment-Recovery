@@ -36,3 +36,10 @@ checkoutController --> payment fails --> Recovery orchestrator(gaurdrails) --> i
 --> recoveryAgentMCPClientService (talks to mcp server/ submits recovery jobs to it with context) --> MCP server gets job -->
 job is send in job queue --> worker picks up job --> escalates to LLM -->  worker sends LLm response (tool-use or job-complete) to client callback URL
 --> if job complete, then stop else loop back to LLM
+
+
+#### Things to note ####
+- multiple reasons of failure for one event
+- AI should generate recovery report and reconciliation
+- Web UI for chatting about recovery reportss
+- provide customer ratings

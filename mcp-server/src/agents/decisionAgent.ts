@@ -1,21 +1,27 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import type { FailureContext, ToolSchema } from "../types";
 import { ActionType } from "../enums";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const SYSTEM_PROMPT = `You are an AI payment recovery agent for a merchant platform. 
+// openai/gpt-oss-120b — most capable model available on this account with tool calling support
+const DECISION_MODEL = "openai/gpt-oss-120b";
+
+const SYSTEM_PROMPT = `You are an AI payment recovery agent for a merchant platform.
 Your job is to analyze failed payment events and decide on the best recovery action.
 
-You will receive:
-- A failure context with classified category, amount, attempt history
-- A set of tools the merchant app can execute
+You will receive a JSON context object containing:
+- failure_event_id: the real failure event ID — use this EXACTLY when calling query_failure_context
+- customer_id: the real customer ID — use this EXACTLY when calling send_notification or escalate_to_human
+- failure_category, amount_bucket, attempt_count, payment_method, previous_actions
+
+IMPORTANT — always use the exact IDs from the context. Never make up or guess IDs.
 
 Your decision rules:
 - "wrong_pin" or "psp_timeout" with low attempt_count: prefer retry_payment
-- "insufficient_funds": prefer send_notification (SMS — short, empathetic, include payday timing hint)
-- "abandoned": prefer send_notification (Email — friendly cart reminder)
-- "do_not_honor": prefer send_notification (Email — suggest alternate payment method)
+- "insufficient_funds": prefer send_notification (channel: "sms")
+- "abandoned": prefer send_notification (channel: "email")
+- "do_not_honor": prefer send_notification (channel: "email")
 - "fraud_block": always use do_nothing — never retry fraud blocks
 - attempt_count >= 3: prefer escalate_to_human regardless of category
 
@@ -30,9 +36,8 @@ export interface DecisionAgentResult {
 
 /**
  * Agent 1 — Recovery Decision Agent.
- * Runs the Claude tool-use loop.
- * When Claude picks a tool, this function returns — the WORKER handles actual relay to merchant.
- * The worker calls this step-by-step via the generator-style interface.
+ * Runs the Groq (Llama 3.3 70B) tool-use loop.
+ * toolSchemas are already in Groq/OpenAI format — passed directly, no conversion needed.
  */
 export async function runDecisionAgent(
   context: FailureContext,
@@ -42,18 +47,16 @@ export async function runDecisionAgent(
     args: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>,
 ): Promise<DecisionAgentResult> {
-  const messages: Anthropic.MessageParam[] = [
+  const messages: Groq.Chat.ChatCompletionMessageParam[] = [
+    {
+      role: "system",
+      content: SYSTEM_PROMPT,
+    },
     {
       role: "user",
-      content: `Analyze this payment failure and decide on the recovery action:
-
-${JSON.stringify(context, null, 2)}
-
-Use the available tools to gather more context if needed, then execute exactly one recovery action.`,
+      content: `Analyze this payment failure and decide on the recovery action:\n\n${JSON.stringify(context, null, 2)}\n\nUse the available tools to gather more context if needed, then execute exactly one recovery action.`,
     },
   ];
-
-  console.log("Messages: ", messages);
 
   let agentReasoning = "";
   let actionType: ActionType | null = null;
@@ -61,66 +64,62 @@ Use the available tools to gather more context if needed, then execute exactly o
 
   // Tool-use loop
   while (true) {
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      tools: toolSchemas as Anthropic.Tool[],
+    const response = await client.chat.completions.create({
+      model: DECISION_MODEL,
       messages,
+      tools: toolSchemas as Groq.Chat.ChatCompletionTool[],
+      tool_choice: "auto",
+      max_tokens: 1024,
     });
 
-    console.log(response);
+    const choice = response.choices[0];
+    const assistantMessage = choice.message;
 
     // Capture any text reasoning
-    for (const block of response.content) {
-      if (block.type === "text") {
-        agentReasoning += block.text + "\n";
-      }
+    if (assistantMessage.content) {
+      agentReasoning += assistantMessage.content + "\n";
     }
 
+    // Add assistant turn to history
+    messages.push(assistantMessage);
+
     // Done — no more tool calls
-    if (response.stop_reason === "end_turn") {
+    if (
+      choice.finish_reason === "stop" ||
+      !assistantMessage.tool_calls?.length
+    ) {
       break;
     }
 
     // Process tool calls
-    if (response.stop_reason === "tool_use") {
-      const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-      );
+    if (
+      choice.finish_reason === "tool_calls" &&
+      assistantMessage.tool_calls?.length
+    ) {
+      for (const toolCall of assistantMessage.tool_calls) {
+        const toolName = toolCall.function.name;
+        const toolArgs = JSON.parse(
+          toolCall.function.arguments ?? "{}",
+        ) as Record<string, unknown>;
 
-      console.log(toolUseBlocks);
-
-      // Add assistant message to history
-      messages.push({ role: "assistant", content: response.content });
-
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-      for (const toolUse of toolUseBlocks) {
-        console.log(`🤖 Agent 1 picked tool: ${toolUse.name}`, toolUse.input);
+        console.log(`🤖 Agent 1 picked tool: ${toolName}`, toolArgs);
 
         // Track the final action tool (not query tools)
-        if (toolUse.name !== "query_failure_context") {
-          actionType = toolUse.name as ActionType;
-          toolCallArgs = toolUse.input as Record<string, unknown>;
+        if (toolName !== "query_failure_context") {
+          actionType = toolName as ActionType;
+          toolCallArgs = toolArgs;
         }
 
         // Relay tool call to merchant app and await result
-        const result = await onToolCall(
-          toolUse.name,
-          toolUse.input as Record<string, unknown>,
-        );
+        const result = await onToolCall(toolName, toolArgs);
 
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
+        // Feed tool result back into message history (OpenAI/Groq format)
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
           content: JSON.stringify(result),
         });
-        console.log(toolResults);
       }
-
-      // Feed tool results back to Claude
-      messages.push({ role: "user", content: toolResults });
     }
   }
 

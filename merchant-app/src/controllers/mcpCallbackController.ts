@@ -8,7 +8,7 @@ const MCP_SERVER_URL = process.env.MCP_SERVER_URL ?? "http://localhost:3001";
 class McpCallbackController {
   /**
    * POST /mcp/tool-call
-   * The MCP server relays a Claude-chosen tool call here.
+   * The MCP server relays a AI-chosen tool call here.
    * We execute the tool locally and POST the result back to the MCP server.
    */
   async handleToolCall(req: Request, res: Response) {
@@ -37,7 +37,7 @@ class McpCallbackController {
 
   /**
    * POST /mcp/job-complete
-   * The MCP server notifies us that Claude has finished deciding and
+   * The MCP server notifies us that AI has finished deciding and
    * all tools have been executed. Update our merchant DB accordingly.
    */
   async handleJobComplete(req: Request, res: Response) {
@@ -74,7 +74,7 @@ class McpCallbackController {
         `\n🏁 MCP job ${jobId} complete | action=${actionType} | outcome=${outcome}`
       );
       if (agentReasoning) {
-        console.log(`   Claude's reasoning: ${agentReasoning}`);
+        console.log(`   AI's reasoning: ${agentReasoning}`);
       }
       if (notificationContent) {
         console.log(`   Notification content:\n${notificationContent}`);

@@ -6,23 +6,26 @@ import { prisma } from "../lib/prismaClient";
 import { createRazorpayOrder } from "../services/razorpay";
 
 export const retryPaymentSchema = {
-  name: "retry_payment",
-  description:
-    "Creates a fresh Razorpay checkout link for a failed payment so the customer can retry. " +
-    "Use for immediate retry cases (wrong PIN, PSP timeout) or when the customer signals intent to pay again.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      payment_id: {
-        type: "string",
-        description: "The merchant-side payment ID that failed.",
+  type: "function" as const,
+  function: {
+    name: "retry_payment",
+    description:
+      "Creates a fresh Razorpay checkout link for a failed payment so the customer can retry. " +
+      "Use for immediate retry cases (wrong PIN, PSP timeout) or when the customer signals intent to pay again.",
+    parameters: {
+      type: "object" as const,
+      properties: {
+        payment_id: {
+          type: "string",
+          description: "The merchant-side payment ID that failed.",
+        },
+        delay_minutes: {
+          type: "number",
+          description: "Minutes to wait before presenting the retry link (0 = immediate).",
+        },
       },
-      delay_minutes: {
-        type: "number",
-        description: "Minutes to wait before presenting the retry link (0 = immediate).",
-      },
+      required: ["payment_id"],
     },
-    required: ["payment_id"],
   },
 };
 

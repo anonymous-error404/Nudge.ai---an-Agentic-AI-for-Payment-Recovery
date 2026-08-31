@@ -1,9 +1,9 @@
 /**
  * Recovery Orchestrator
  *
- * Stub for the MCP agent + Claude decision logic.
+ * Stub for the MCP agent + AI decision logic.
  * Deterministic rules decide immediate vs. delayed recovery.
- * When the MCP agent is built, replace the routing block with a Claude tool-use call.
+ * When the MCP agent is built, replace the routing block with a AI tool-use call.
  */
 
 import { FailureCategory, RecoveryType, RecoveryActionType, RecoveryOutcome, NotificationChannel } from "../enums";
@@ -15,7 +15,7 @@ import { mcpClient } from "./recoveryAgentMCPClientService";
 export type { RecoveryDecision };
 export { RecoveryType, RecoveryActionType };
 
-/** Maximum retry attempts before escalating. Enforced here (guardrail), not by Claude. */
+/** Maximum retry attempts before escalating. Enforced here (guardrail), not by AI. */
 const MAX_RETRY_ATTEMPTS = 3;
 
 /** Categories where immediate recovery is appropriate (re-prompt during checkout). */
@@ -86,8 +86,8 @@ export async function handlePaymentFailure(
     };
   }
 
-  // ── Delayed recovery → hand off to MCP server + Claude ───────────────────────
-  // Claude will decide: send_notification, retry_payment, or escalate_to_human.
+  // ── Delayed recovery → hand off to MCP server + AI ───────────────────────
+  // AI will decide: send_notification, retry_payment, or escalate_to_human.
   // Result comes back asynchronously via POST /mcp/job-complete.
   const { jobId } = await mcpClient.submitRecoveryJob(failureEventId, category, paymentId);
 

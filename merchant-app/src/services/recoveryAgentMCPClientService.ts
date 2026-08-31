@@ -6,7 +6,7 @@
  *  2. Submitting a recovery job to the central MCP server
  *  3. Polling for job completion (used by escalated immediate failures)
  *
- * The MCP server runs the Claude tool-use loop and relays tool calls back
+ * The MCP server runs the AI tool-use loop and relays tool calls back
  * to our /mcp/tool-call callback endpoint, which executes them locally.
  */
 
@@ -58,6 +58,8 @@ async function buildFailureContext(
   );
 
   return {
+    failure_event_id: failureEventId,
+    customer_id: order?.customerId ?? "unknown",
     failure_category: category,
     amount_bucket: amountBucket,
     attempt_count: previousActions.length,
@@ -66,6 +68,15 @@ async function buildFailureContext(
     previous_actions: previousActions.map(
       (a) => `${a.actionType}:${a.outcome}`,
     ),
+    order_details: order
+      ? {
+          order_id: order.id,
+          product_name: order.product?.name ?? "your item",
+          product_description: order.product?.description ?? undefined,
+          amount_rupees: Math.round(order.amount / 100), // Razorpay stores in paise
+          currency: "INR",
+        }
+      : null,
   };
 }
 
