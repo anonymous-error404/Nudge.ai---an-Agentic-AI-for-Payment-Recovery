@@ -30,3 +30,9 @@ E. Webhook signature verification
 Every webhook includes a signature header validated against a secret you set. Non-negotiable to implement — an unverified webhook endpoint is a spoofing risk, and skipping this would actually hurt you on the "compliant" part of the bar.
 
 
+#### CURRENT SYSTEM FLOW ####
+
+checkoutController --> payment fails --> Recovery orchestrator(gaurdrails) --> if not simple retry, send to LLM 
+--> recoveryAgentMCPClientService (talks to mcp server/ submits recovery jobs to it with context) --> MCP server gets job -->
+job is send in job queue --> worker picks up job --> escalates to LLM -->  worker sends LLm response (tool-use or job-complete) to client callback URL
+--> if job complete, then stop else loop back to LLM

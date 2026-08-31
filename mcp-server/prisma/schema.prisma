@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Cross-merchant audit log ─────────────────────────────────────────────────
+// No PII. Every row scoped by merchantId.
+
+model FailureEvent {
+  id                 String           @id @default(cuid())
+  merchantId         String
+  externalRef        String           // merchant's own failure_event ID (for idempotency)
+  classifiedCategory String
+  amountBucket       String           // "0-500" | "500-1000" | "1000-5000" | "5000+"
+  paymentMethod      String
+  detectedAt         DateTime         @default(now())
+  recoveryActions    RecoveryAction[]
+
+  @@unique([merchantId, externalRef])  // idempotency: same failure never logged twice
+}
+
+model RecoveryAction {
+  id             String       @id @default(cuid())
+  merchantId     String
+  failureEventId String
+  failureEvent   FailureEvent @relation(fields: [failureEventId], references: [id])
+  jobId          String       @unique  // BullMQ job ID for correlation
+  actionType     String?               // set after Claude decides
+  outcome        String       @default("pending")  // pending | in_progress | success | failed | skipped
+  attemptNumber  Int
+  agentReasoning String?
+  notificationContent String?          // Agent 3 output (email/SMS copy)
+  executedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}

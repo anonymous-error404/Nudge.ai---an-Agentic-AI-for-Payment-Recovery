@@ -1,10 +1,11 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
-import shopRouter from "./routes/shop";
-import checkoutRouter from "./routes/checkout";
-import webhookRouter from "./routes/webhook";
+import shopRouter from "./routes/shopRoutes";
+import checkoutRouter from "./routes/checkoutRoutes";
+import webhookRouter from "./routes/webhookRoutes";
 import devSimulatorRouter from "./routes/failureSimulatorRoutes";
+import mcpCallbackRouter from "./routes/mcpCallbackRoutes";
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -33,6 +34,7 @@ app.use(webhookRouter);        // /webhook/razorpay
 app.use(shopRouter);           // /api/products, /api/orders, /api/failure-events, /api/customers
 app.use(checkoutRouter);       // /api/checkout, /api/payment/*
 app.use(devSimulatorRouter);   // /api/dev/simulate-failure, /api/dev/failure-scenarios
+app.use(mcpCallbackRouter);    // /mcp/tool-call, /mcp/job-complete
 
 // ─── SPA fallback for HTML pages ─────────────────────────────────────────────
 app.get("/product", (_req, res) => {

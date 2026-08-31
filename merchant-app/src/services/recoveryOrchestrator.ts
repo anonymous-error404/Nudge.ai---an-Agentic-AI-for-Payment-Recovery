@@ -1,12 +1,15 @@
-import { prisma } from "../lib/prismaClient";
-import {
-  FailureCategory,
-  RecoveryType,
-  RecoveryActionType,
-  RecoveryOutcome,
-  NotificationChannel,
-} from "../enums";
+/**
+ * Recovery Orchestrator
+ *
+ * Stub for the MCP agent + Claude decision logic.
+ * Deterministic rules decide immediate vs. delayed recovery.
+ * When the MCP agent is built, replace the routing block with a Claude tool-use call.
+ */
+
+import { FailureCategory, RecoveryType, RecoveryActionType, RecoveryOutcome, NotificationChannel } from "../enums";
 import { RecoveryDecision } from "../types";
+import { failureEventRepository } from "../repositories/failureEventRepository";
+import { mcpClient } from "./recoveryAgentMCPClientService";
 
 // Re-export so callers that imported these from here still work
 export type { RecoveryDecision };
@@ -17,29 +20,22 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 /** Categories where immediate recovery is appropriate (re-prompt during checkout). */
 const IMMEDIATE_RECOVERY_CATEGORIES: FailureCategory[] = [
-  FailureCategory.WrongPin, // Just mistyped — retry right now
-  FailureCategory.PspTimeout, // Network glitch — retry after reconciliation check
+  FailureCategory.WrongPin,    // Just mistyped — retry right now
+  FailureCategory.PspTimeout,  // Network glitch — retry after reconciliation check
 ];
 
 /** Categories that must never be auto-retried. */
-const NO_RETRY_CATEGORIES: FailureCategory[] = [FailureCategory.FraudBlock];
+const NO_RETRY_CATEGORIES: FailureCategory[] = [
+  FailureCategory.FraudBlock,
+];
 
-/**
- * handlePaymentFailure
- *
- * Core orchestration stub. Determines recovery posture and logs to recovery_actions.
- * Replace the routing block with Claude tool-use when MCP agent is built.
- */
 export async function handlePaymentFailure(
   failureEventId: string,
   category: FailureCategory,
-  paymentId: string,
+  paymentId: string
 ): Promise<RecoveryDecision> {
   // ── Guardrail: check existing attempt count ───────────────────────────────
-  const existingActions = await prisma.recoveryAction.findMany({
-    where: { failureEventId },
-    orderBy: { attemptNumber: "desc" },
-  });
+  const existingActions = await failureEventRepository.getRecoveryActionsByFailureEventId(failureEventId);
   const attemptNumber = existingActions.length + 1;
 
   // ── Guardrail: escalate if max attempts exceeded ──────────────────────────
@@ -54,8 +50,7 @@ export async function handlePaymentFailure(
     return {
       recoveryType: RecoveryType.None,
       action: RecoveryActionType.EscalateToHuman,
-      message:
-        "Maximum recovery attempts reached. Our team will review this payment.",
+      message: "Maximum recovery attempts reached. Our team will review this payment.",
     };
   }
 
@@ -91,19 +86,22 @@ export async function handlePaymentFailure(
     };
   }
 
-  // ── Delayed recovery ──────────────────────────────────────────────────────
-  // TODO: Replace with Claude tool-use call:
-  //   const claudeDecision = await mcpClient.callClaude({ category, attemptNumber, amountBucket, ... })
-  //   const validated = guardrails.validate(claudeDecision)
+  // ── Delayed recovery → hand off to MCP server + Claude ───────────────────────
+  // Claude will decide: send_notification, retry_payment, or escalate_to_human.
+  // Result comes back asynchronously via POST /mcp/job-complete.
+  const { jobId } = await mcpClient.submitRecoveryJob(failureEventId, category, paymentId);
+
+  // Log a pending recovery action locally so the merchant DB tracks the attempt
   const channel = getNotificationChannel(category);
   await logAction(failureEventId, {
     failureEventId,
-    actionType: RecoveryActionType.SendNotification,
+    actionType: RecoveryActionType.SendNotification, // placeholder — updated by job-complete callback
     channel,
     outcome: RecoveryOutcome.Pending,
     attemptNumber,
-    agentReasoning: `Delayed recovery for category=${category}. Agent will send nudge via ${channel}.`,
+    agentReasoning: `Submitted to MCP server for AI decision. Job: ${jobId}`,
   });
+
   return {
     recoveryType: RecoveryType.Delayed,
     action: RecoveryActionType.SendNotification,
@@ -122,53 +120,39 @@ async function logAction(
     outcome: RecoveryOutcome;
     attemptNumber: number;
     agentReasoning?: string;
-  },
+  }
 ) {
-  return prisma.recoveryAction.create({
-    data: {
-      failureEventId,
-      actionType: params.actionType,
-      channel: params.channel,
-      outcome: params.outcome,
-      attemptNumber: params.attemptNumber,
-      agentReasoning: params.agentReasoning,
-    },
+  return failureEventRepository.createRecoveryAction({
+    failureEventId,
+    actionType: params.actionType,
+    channel: params.channel,
+    outcome: params.outcome,
+    attemptNumber: params.attemptNumber,
+    agentReasoning: params.agentReasoning,
   });
 }
 
 function getImmediateMessage(category: FailureCategory): string {
   switch (category) {
-    case FailureCategory.WrongPin:
-      return "Incorrect PIN entered. Please try again with the correct UPI PIN.";
-    case FailureCategory.PspTimeout:
-      return "Payment timed out due to a network issue. Please try again.";
-    default:
-      return "Please try your payment again.";
+    case FailureCategory.WrongPin:   return "Incorrect PIN entered. Please try again with the correct UPI PIN.";
+    case FailureCategory.PspTimeout: return "Payment timed out due to a network issue. Please try again.";
+    default:                         return "Please try your payment again.";
   }
 }
 
 function getDelayedMessage(category: FailureCategory): string {
   switch (category) {
-    case FailureCategory.InsufficientFunds:
-      return "Payment failed due to insufficient funds. We'll send you a reminder to complete your purchase.";
-    case FailureCategory.DoNotHonor:
-      return "Your bank declined this payment. We'll follow up with alternative payment options.";
-    case FailureCategory.Abandoned:
-      return "Your cart is saved. We'll send you a reminder to complete your purchase.";
-    default:
-      return "We'll follow up about your payment shortly.";
+    case FailureCategory.InsufficientFunds: return "Payment failed due to insufficient funds. We'll send you a reminder to complete your purchase.";
+    case FailureCategory.DoNotHonor:        return "Your bank declined this payment. We'll follow up with alternative payment options.";
+    case FailureCategory.Abandoned:         return "Your cart is saved. We'll send you a reminder to complete your purchase.";
+    default:                                return "We'll follow up about your payment shortly.";
   }
 }
 
-function getNotificationChannel(
-  category: FailureCategory,
-): NotificationChannel {
+function getNotificationChannel(category: FailureCategory): NotificationChannel {
   switch (category) {
-    case FailureCategory.InsufficientFunds:
-      return NotificationChannel.SMS;
-    case FailureCategory.Abandoned:
-      return NotificationChannel.Email;
-    default:
-      return NotificationChannel.Email;
+    case FailureCategory.InsufficientFunds: return NotificationChannel.SMS;
+    case FailureCategory.Abandoned:         return NotificationChannel.Email;
+    default:                                return NotificationChannel.Email;
   }
 }
