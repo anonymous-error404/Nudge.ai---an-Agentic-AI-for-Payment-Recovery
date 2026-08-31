@@ -1,0 +1,32 @@
+Razorpay integration webhooks provided by them that we need :
+
+A. Payments Webhooks
+Events provided by Payments Webhooks (POST URL) by razorpay - 
+
+- payment.failed : tells everything about payment failure we need to find root cause
+
+- payment.authorised/payment.captured :- sometimes after failure, it may send this event signal, like delayed confirmation so we have to wait for some time for this, then only automate retry
+
+- order.paid — tells you an order was successfully completed, useful as the "did they come back and pay" signal after a recovery nudge.
+
+B. Orders API
+
+Razorpay Orders represent an intended payment. If an order is created but never reaches paid status, that's your abandoned-checkout signal. You'd periodically query orders in created/attempted state that are past some time threshold.
+
+C. Payment Fetch API - for reconciliation
+
+This is your safety net for the "payment status unknown" case (money possibly debited, no clear webhook received). Before your agent nudges a customer to pay again, it should call the fetch-by-ID API to confirm the payment truly failed — this is exactly the kind of "gated, explainable" check the track's bar is asking for.
+
+D. Subscriptions / UPI Autopay Webhooks — for the mandate-retry direction
+Separate event stream from regular payments:
+
+- subscription.pending — a scheduled charge failed but retries remain
+- subscription.halted — all auto-retries (Razorpay does some limited automatic retries itself) exhausted
+- subscription.charged — recovered successfully
+- Mandate lifecycle events: created, authorized, activated, paused, revoked
+- for mandate retry, we have to retry after razorpay retries have been exhausted, and also retry smartly like on/after a payday.
+
+E. Webhook signature verification
+Every webhook includes a signature header validated against a secret you set. Non-negotiable to implement — an unverified webhook endpoint is a spoofing risk, and skipping this would actually hurt you on the "compliant" part of the bar.
+
+

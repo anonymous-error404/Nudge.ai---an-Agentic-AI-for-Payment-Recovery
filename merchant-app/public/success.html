@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Successful — TechZone</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <div class="nav-links">
+    <a href="/">Store</a>
+    <a href="/admin">Admin Panel</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="success-card">
+    <div class="success-icon">🎉</div>
+    <h1>Payment Successful!</h1>
+    <p>Your order has been placed and payment captured successfully.</p>
+
+    <div class="payment-id" id="payment-details">
+      Loading payment details…
+    </div>
+
+    <a href="/" class="btn btn-primary" style="text-decoration:none;">
+      ← Continue Shopping
+    </a>
+    <br />
+    <a href="/admin" style="display:block; margin-top:1rem; font-size:0.85rem; color: var(--text-muted); text-align:center;">
+      View in Admin Panel →
+    </a>
+  </div>
+</div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const paymentId = params.get('payment_id');
+  const orderId = params.get('order_id');
+
+  const details = document.getElementById('payment-details');
+  if (paymentId && orderId) {
+    details.innerHTML = `
+      <div style="margin-bottom:0.5rem;">Payment ID</div>
+      <strong>${paymentId}</strong>
+      <div style="margin-top:0.75rem; margin-bottom:0.25rem;">Razorpay Order ID</div>
+      <strong>${orderId}</strong>
+    `;
+  } else {
+    details.textContent = 'Payment details not available.';
+  }
+</script>
+
+</body>
+</html>

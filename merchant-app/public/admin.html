@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel — TechZone Recovery Agent</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <div class="nav-links">
+    <a href="/">Store</a>
+    <a href="/admin">Admin Panel</a>
+  </div>
+</nav>
+
+<div class="container">
+  <h1 style="margin-bottom:0.25rem;">Recovery Agent Dashboard</h1>
+  <p style="color: var(--text-muted); margin-bottom: 2rem; font-size:0.9rem;">
+    Live view of orders, failures, and recovery actions · Auto-refreshes every 10s
+  </p>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="stats">
+    <div class="stat-card accent"><div class="label">Total Orders</div><div class="value" id="s-total">—</div></div>
+    <div class="stat-card success"><div class="label">Paid Orders</div><div class="value" id="s-paid">—</div></div>
+    <div class="stat-card danger"><div class="label">Failed Payments</div><div class="value" id="s-failed">—</div></div>
+    <div class="stat-card warning"><div class="label">Pending Recovery</div><div class="value" id="s-pending">—</div></div>
+    <div class="stat-card success"><div class="label">Revenue Recovered</div><div class="value" id="s-recovered">—</div></div>
+    <div class="stat-card accent"><div class="label">At Risk (₹)</div><div class="value" id="s-atrisk">—</div></div>
+  </div>
+
+  <!-- Failure Simulator -->
+  <div class="section-title">🧪 Failure Simulator</div>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 2rem;">
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">
+      Fires a real signed <code>payment.failed</code> webhook payload at the server for each failure type —
+      tests the full pipeline: signature verify → classify → failure_event → handlePaymentFailure().
+    </p>
+
+    <!-- Scenario buttons — loaded dynamically -->
+    <div id="sim-buttons" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem;">
+      <div class="spinner" style="width:20px; height:20px; border-width:2px;"></div>
+    </div>
+
+    <!-- Result log -->
+    <div id="sim-log" style="display:none;">
+      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Last simulation result:</div>
+      <div id="sim-result" style="
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: var(--text);
+        white-space: pre-wrap;
+        max-height: 260px;
+        overflow-y: auto;
+      "></div>
+    </div>
+  </div>
+
+  <!-- Failure Events Table -->
+  <div class="section-title">🚨 Failure Events &amp; Recovery Actions</div>
+  <div id="failure-loading" class="loading" style="padding:2rem;">
+    <div class="spinner"></div><p>Loading…</p>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="failure-table" id="failure-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Product</th>
+          <th>Amount</th>
+          <th>Failure Category</th>
+          <th>Root Cause (snippet)</th>
+          <th>Recovery Actions</th>
+          <th>Detected</th>
+        </tr>
+      </thead>
+      <tbody id="failure-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- All Orders Table -->
+  <div class="section-title" style="margin-top:2.5rem;">📦 All Orders</div>
+  <div id="orders-loading" class="loading" style="padding:2rem;">
+    <div class="spinner"></div><p>Loading…</p>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="failure-table" id="orders-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Customer</th>
+          <th>Product</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Razorpay Order ID</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="orders-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const CATEGORY_BADGES = {
+    insufficient_funds: ['badge-warning', 'Insufficient Funds'],
+    wrong_pin:          ['badge-warning', 'Wrong PIN'],
+    abandoned:          ['badge-info',    'Abandoned'],
+    do_not_honor:       ['badge-danger',  'Do Not Honor'],
+    psp_timeout:        ['badge-danger',  'PSP Timeout'],
+    fraud_block:        ['badge-danger',  'Fraud Block'],
+    unknown:            ['badge-neutral', 'Unknown'],
+  };
+
+  const ORDER_BADGES = {
+    paid:      ['badge-success', 'Paid'],
+    failed:    ['badge-danger',  'Failed'],
+    attempted: ['badge-warning', 'Attempted'],
+    created:   ['badge-neutral', 'Created'],
+  };
+
+  const ACTION_BADGES = {
+    retry_payment:      ['badge-warning', '🔄 Retry'],
+    send_notification:  ['badge-info',    '📩 Notify'],
+    escalate_to_human:  ['badge-danger',  '🚨 Escalate'],
+    do_nothing:         ['badge-neutral', '⏸ No Action'],
+  };
+
+  function badge(map, key) {
+    const [cls, label] = map[key] || ['badge-neutral', key];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  function formatINR(paise) {
+    return '₹' + (paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  }
+
+  function timeAgo(dateStr) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hrs  = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    if (days > 0) return `${days}d ago`;
+    if (hrs  > 0) return `${hrs}h ago`;
+    if (mins > 0) return `${mins}m ago`;
+    return 'just now';
+  }
+
+  async function loadData() {
+    const [eventsRes, ordersRes] = await Promise.all([
+      fetch('/api/failure-events'),
+      fetch('/api/orders'),
+    ]);
+
+    const { data: events } = await eventsRes.json();
+    const { data: orders } = await ordersRes.json();
+
+    // ── Stats ──────────────────────────────────────────────────────────────────
+    const totalOrders  = orders.length;
+    const paidOrders   = orders.filter(o => o.status === 'paid').length;
+    const failedPays   = events.length;
+    const pendingRec   = events.filter(e => e.recoveryActions.length === 0).length;
+
+    const atRisk = events
+      .filter(e => e.recoveryActions.every(a => a.outcome !== 'success'))
+      .reduce((s, e) => s + e.payment.order.amount, 0);
+
+    const recovered = events
+      .filter(e => e.recoveryActions.some(a => a.outcome === 'success'))
+      .reduce((s, e) => s + e.payment.order.amount, 0);
+
+    document.getElementById('s-total').textContent = totalOrders;
+    document.getElementById('s-paid').textContent  = paidOrders;
+    document.getElementById('s-failed').textContent = failedPays;
+    document.getElementById('s-pending').textContent = pendingRec;
+    document.getElementById('s-recovered').textContent = formatINR(recovered);
+    document.getElementById('s-atrisk').textContent = formatINR(atRisk);
+
+    // ── Failure Events Table ──────────────────────────────────────────────────
+    document.getElementById('failure-loading').style.display = 'none';
+    document.getElementById('failure-table').style.display = 'table';
+
+    const ftbody = document.getElementById('failure-tbody');
+    if (events.length === 0) {
+      ftbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted); padding:2rem;">No failure events yet</td></tr>';
+    } else {
+      ftbody.innerHTML = events.map(e => {
+        const actions = e.recoveryActions.length
+          ? e.recoveryActions.map(a =>
+              `${badge(ACTION_BADGES, a.actionType)} <small style="color:var(--text-muted)">#${a.attemptNumber}</small>`
+            ).join(' ')
+          : '<span style="color:var(--text-muted); font-size:0.8rem;">None yet</span>';
+
+        return `<tr>
+          <td>${e.payment.order.customer.name}</td>
+          <td>${e.payment.order.product.name.substring(0, 28)}…</td>
+          <td>${formatINR(e.payment.order.amount)}</td>
+          <td>${badge(CATEGORY_BADGES, e.classifiedCategory)}</td>
+          <td style="max-width:240px; font-size:0.78rem; color:var(--text-muted);">${e.rootCause.substring(0, 80)}…</td>
+          <td>${actions}</td>
+          <td style="font-size:0.8rem; color:var(--text-muted);">${timeAgo(e.detectedAt)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ── Orders Table ──────────────────────────────────────────────────────────
+    document.getElementById('orders-loading').style.display = 'none';
+    document.getElementById('orders-table').style.display = 'table';
+
+    const otbody = document.getElementById('orders-tbody');
+    otbody.innerHTML = orders.map(o => `<tr>
+      <td>${o.customer.name}</td>
+      <td>${o.product.name.substring(0, 28)}…</td>
+      <td>${formatINR(o.amount)}</td>
+      <td>${badge(ORDER_BADGES, o.status)}</td>
+      <td style="font-family:monospace; font-size:0.78rem; color:var(--text-muted);">${o.razorpayOrderId || '—'}</td>
+      <td style="font-size:0.8rem; color:var(--text-muted);">${timeAgo(o.createdAt)}</td>
+    </tr>`).join('');
+  }
+
+  loadData().catch(console.error);
+  setInterval(() => loadData().catch(console.error), 10000);
+
+  // ── Failure Simulator ──────────────────────────────────────────────────────
+
+  const RECOVERY_COLOR = {
+    immediate: '#4cc9f0',
+    delayed:   '#f8961e',
+    none:      '#f72585',
+  };
+
+  async function loadSimulatorButtons() {
+    const res = await fetch('/api/dev/failure-scenarios');
+    const { data: scenarios } = await res.json();
+    const container = document.getElementById('sim-buttons');
+    container.innerHTML = scenarios.map(s => `
+      <button
+        onclick="simulate('${s.key}')"
+        title="${s.description}"
+        style="
+          padding: 0.6rem 1rem;
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          color: var(--text);
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 600;
+          transition: all 0.2s;
+        "
+        onmouseover="this.style.borderColor='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)'"
+        id="sim-btn-${s.key}"
+      >
+        ${methodIcon(s.method)} ${s.label}
+      </button>
+    `).join('');
+  }
+
+  function methodIcon(method) {
+    return method === 'upi' ? '📱' : '💳';
+  }
+
+  async function simulate(failureType) {
+    const btn = document.getElementById(`sim-btn-${failureType}`);
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+
+    const logEl = document.getElementById('sim-log');
+    const resultEl = document.getElementById('sim-result');
+    logEl.style.display = 'block';
+    resultEl.textContent = '⏳ Simulating…';
+
+    try {
+      const res = await fetch('/api/dev/simulate-failure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ failureType }),
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        resultEl.textContent = '❌ Error: ' + (data.error || 'Unknown error');
+        return;
+      }
+
+      const d = data.data;
+      const fe = d.failureEvent;
+      const recoveryType = fe?.recoveryActions?.[0] ? (
+        ['retry_payment'].includes(fe.recoveryActions[0].actionType) ? 'immediate' :
+        fe.recoveryActions[0].actionType === 'do_nothing' ? 'none' : 'delayed'
+      ) : '—';
+
+      resultEl.innerHTML = [
+        `<span style="color:#4cc9f0">✅ ${d.scenario.label}</span>`,
+        ``,
+        `📦 Order:    ${d.order.id}  (${formatINR(d.order.amount)})`,
+        `💳 Payment:  ${d.payment.id}`,
+        `🏷️  Category: ${fe?.classifiedCategory ?? '—'}`,
+        ``,
+        `🤖 Recovery Decision:`,
+        fe?.recoveryActions?.length
+          ? fe.recoveryActions.map(a =>
+              `   action=${a.actionType}  outcome=${a.outcome}  attempt=#${a.attemptNumber}\n   reasoning: ${a.agentReasoning ?? '—'}`
+            ).join('\n')
+          : '   (no action logged yet — check logs)',
+        ``,
+        `💡 Expected: ${d.scenario.expectedRecovery}`,
+      ].join('\n');
+
+      // Refresh the tables so new failure event shows immediately
+      loadData().catch(console.error);
+
+    } catch (err) {
+      resultEl.textContent = '❌ ' + err.message;
+    } finally {
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  }
+
+  // Expose simulate globally (called from inline onclick)
+  window.simulate = simulate;
+
+  loadSimulatorButtons().catch(console.error);
+</script>
+
+</body>
+</html>

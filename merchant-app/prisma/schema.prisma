@@ -1,0 +1,97 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id                        String   @id @default(cuid())
+  name                      String
+  phone                     String
+  email                     String   @unique
+  notificationPreferences   String   @default("email,sms") // comma-separated
+  createdAt                 DateTime @default(now())
+  orders                    Order[]
+
+  @@map("customers")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  price       Int      // in paise (INR * 100)
+  imageUrl    String   @default("")
+  stock       Int      @default(100)
+  createdAt   DateTime @default(now())
+  orders      Order[]
+
+  @@map("products")
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  customerId       String
+  productId        String
+  amount           Int         // in paise
+  status           String      @default("created") // created | attempted | paid | failed
+  razorpayOrderId  String?     @unique
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  customer         Customer    @relation(fields: [customerId], references: [id])
+  product          Product     @relation(fields: [productId], references: [id])
+  payments         Payment[]
+
+  @@map("orders")
+}
+
+model Payment {
+  id                  String         @id @default(cuid())
+  orderId             String
+  razorpayPaymentId   String?        @unique
+  status              String         // captured | failed | created
+  errorCode           String?
+  errorReason         String?
+  errorSource         String?
+  errorStep           String?
+  errorDescription    String?
+  method              String?        // upi | card | netbanking | wallet
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  order               Order          @relation(fields: [orderId], references: [id])
+  failureEvents       FailureEvent[]
+
+  @@map("payments")
+}
+
+model FailureEvent {
+  id                 String           @id @default(cuid())
+  paymentId          String
+  classifiedCategory String           // insufficient_funds | wrong_pin | abandoned | do_not_honor | psp_timeout
+  detectedAt         DateTime         @default(now())
+  rootCause          String
+  payment            Payment          @relation(fields: [paymentId], references: [id])
+  recoveryActions    RecoveryAction[]
+
+  @@map("failure_events")
+}
+
+model RecoveryAction {
+  id             String       @id @default(cuid())
+  failureEventId String
+  actionType     String       // retry_payment | send_notification | escalate_to_human | do_nothing
+  channel        String?      // sms | email | whatsapp (for send_notification)
+  executedAt     DateTime     @default(now())
+  outcome        String       @default("pending") // pending | success | failed
+  attemptNumber  Int          @default(1)
+  agentReasoning String?      // Claude's reasoning (redacted, no PII)
+  failureEvent   FailureEvent @relation(fields: [failureEventId], references: [id])
+
+  @@map("recovery_actions")
+}

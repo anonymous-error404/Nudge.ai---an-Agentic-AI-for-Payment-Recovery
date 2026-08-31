@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechZone — Mock Merchant Store</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <div class="nav-links">
+    <a href="/">Store</a>
+    <a href="/admin">Admin Panel</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>Premium Tech, <span>Unbeatable Prices</span></h1>
+  <p>Mock merchant store — Razorpay AI Payment Recovery Agent demo</p>
+</div>
+
+<div class="container">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading products…</p>
+  </div>
+  <div id="products" class="products-grid" style="display:none;"></div>
+</div>
+
+<script>
+  async function loadProducts() {
+    const res = await fetch('/api/products');
+    const { data } = await res.json();
+
+    document.getElementById('loading').style.display = 'none';
+    const grid = document.getElementById('products');
+    grid.style.display = 'grid';
+
+    grid.innerHTML = data.map(p => `
+      <a class="product-card" href="/product?id=${p.id}">
+        <img src="${p.imageUrl}" alt="${p.name}" loading="lazy" />
+        <div class="product-card-body">
+          <h3>${p.name}</h3>
+          <p>${p.description}</p>
+          <div class="price">₹${(p.price / 100).toLocaleString('en-IN')}</div>
+          <div class="price-sub">incl. all taxes</div>
+          <button class="btn btn-primary" onclick="event.preventDefault(); window.location='/product?id=${p.id}'">
+            Buy Now →
+          </button>
+        </div>
+      </a>
+    `).join('');
+  }
+
+  loadProducts().catch(() => {
+    document.getElementById('loading').innerHTML = '<p>Failed to load products. Is the server running?</p>';
+  });
+</script>
+
+</body>
+</html>

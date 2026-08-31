@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buy Product — TechZone</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <div class="nav-links">
+    <a href="/">Store</a>
+    <a href="/admin">Admin Panel</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="breadcrumb">
+    <a href="/">Store</a>
+    <span>/</span>
+    <span id="breadcrumb-name">Product</span>
+  </div>
+
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading product…</p>
+  </div>
+
+  <div id="product-detail" class="product-detail" style="display:none;">
+    <div>
+      <img id="product-image" src="" alt="" />
+    </div>
+    <div>
+      <h1 id="product-name"></h1>
+      <p class="description" id="product-description"></p>
+      <div class="price" id="product-price"></div>
+      <div class="price-sub">+ free delivery · 1 year warranty</div>
+
+      <div class="customer-select" style="margin-top: 1.5rem;">
+        <label for="customer-select">👤 Shopping as:</label>
+        <select id="customer-select">
+          <option value="">Loading customers…</option>
+        </select>
+        <div style="font-size:0.78rem; color: var(--text-muted); margin-top: 0.3rem;">
+          Demo: choose any customer to simulate a purchase
+        </div>
+      </div>
+
+      <button id="buy-btn" class="btn btn-primary" disabled>
+        🔒 Pay with Razorpay
+      </button>
+
+      <div style="margin-top:1rem; font-size:0.8rem; color: var(--text-muted); text-align:center;">
+        🛡️ Secure payment via Razorpay · Test mode enabled
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Razorpay Checkout.js -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  let productData = null;
+
+  // ─── Load product ──────────────────────────────────────────────────────────
+  const productId = new URLSearchParams(window.location.search).get('id');
+
+  async function loadProduct() {
+    if (!productId) {
+      document.getElementById('loading').innerHTML = '<p>No product ID in URL.</p>';
+      return;
+    }
+
+    const [productRes, customersRes] = await Promise.all([
+      fetch(`/api/products/${productId}`),
+      fetch('/api/customers')
+    ]);
+
+    const { data: product } = await productRes.json();
+    const { data: customers } = await customersRes.json();
+
+    productData = product;
+
+    // Populate product UI
+    document.getElementById('breadcrumb-name').textContent = product.name;
+    document.getElementById('product-name').textContent = product.name;
+    document.getElementById('product-description').textContent = product.description;
+    document.getElementById('product-price').textContent =
+      '₹' + (product.price / 100).toLocaleString('en-IN');
+    const img = document.getElementById('product-image');
+    img.src = product.imageUrl;
+    img.alt = product.name;
+
+    // Populate customer dropdown
+    const select = document.getElementById('customer-select');
+    select.innerHTML = customers.map(c =>
+      `<option value="${c.id}">${c.name} — ${c.email}</option>`
+    ).join('');
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('product-detail').style.display = 'grid';
+    document.getElementById('buy-btn').disabled = false;
+  }
+
+  // ─── Razorpay Checkout ─────────────────────────────────────────────────────
+  document.getElementById('buy-btn').addEventListener('click', async () => {
+    const customerId = document.getElementById('customer-select').value;
+    if (!customerId || !productData) return;
+
+    const btn = document.getElementById('buy-btn');
+    btn.disabled = true;
+    btn.textContent = 'Creating order…';
+
+    try {
+      // 1. Create Razorpay Order via our backend
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: productData.id, customerId }),
+      });
+      const { success, data, error } = await res.json();
+
+      if (!success) throw new Error(error || 'Failed to create order');
+
+      // 2. Open Razorpay Checkout modal
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'TechZone',
+        description: data.productName,
+        order_id: data.razorpayOrderId,
+        prefill: {
+          name: data.customerName,
+          email: data.customerEmail,
+          contact: data.customerPhone,
+        },
+        theme: { color: '#4361ee' },
+        modal: {
+          ondismiss: () => {
+            btn.disabled = false;
+            btn.textContent = '🔒 Pay with Razorpay';
+            showToast('Payment cancelled', 'error');
+          }
+        },
+        handler: async (response) => {
+          // 3. Verify payment signature on the backend
+          try {
+            const verifyRes = await fetch('/api/payment/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              window.location.href = `/success?payment_id=${response.razorpay_payment_id}&order_id=${response.razorpay_order_id}`;
+            } else {
+              showToast('Payment verification failed', 'error');
+              btn.disabled = false;
+              btn.textContent = '🔒 Pay with Razorpay';
+            }
+          } catch (e) {
+            showToast('Verification error: ' + e.message, 'error');
+          }
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+
+      rzp.on('payment.failed', async (response) => {
+        console.error('Payment failed:', response.error);
+
+        // Tell the backend about this failure immediately (fast path).
+        // The backend will: classify → create failure_event → call handlePaymentFailure() → return decision.
+        try {
+          const failRes = await fetch('/api/payment/failed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: data.razorpayOrderId,
+              razorpay_payment_id: response.error.metadata?.payment_id ?? null,
+              method: response.error.metadata?.payment_method ?? null,
+              error: {
+                code: response.error.code,
+                description: response.error.description,
+                source: response.error.source,
+                step: response.error.step,
+                reason: response.error.reason,
+                metadata: response.error.metadata,
+              },
+            }),
+          });
+
+          const failData = await failRes.json();
+          const decision = failData?.data?.decision;
+
+          if (decision?.recoveryType === 'immediate') {
+            // ── Immediate recovery ─────────────────────────────────────────────
+            // Failure types: wrong_pin, psp_timeout
+            // Action: re-open the checkout modal right now
+            showToast('⚠️ ' + decision.message + ' Retrying…', 'error');
+            btn.textContent = '🔄 Retrying…';
+
+            // Short delay so the toast is readable, then re-open
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.textContent = '🔒 Pay with Razorpay';
+              rzp.open(); // Re-open the same checkout modal
+            }, 1500);
+
+          } else {
+            // ── Delayed recovery or no-retry ──────────────────────────────────
+            // Failure types: insufficient_funds, abandoned, do_not_honor, fraud_block
+            const msg = decision?.message || ('Payment failed: ' + response.error.description);
+            showToast(msg, 'error');
+            btn.disabled = false;
+            btn.textContent = '🔒 Pay with Razorpay';
+          }
+        } catch (err) {
+          // If our backend call fails, fall back to a basic error message
+          console.error('Failed to report payment failure to backend:', err);
+          showToast('Payment failed: ' + response.error.description, 'error');
+          btn.disabled = false;
+          btn.textContent = '🔒 Pay with Razorpay';
+        }
+      });
+
+      rzp.open();
+
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '🔒 Pay with Razorpay';
+    }
+  });
+
+  function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
+
+  loadProduct().catch(err => {
+    document.getElementById('loading').innerHTML = `<p>Error: ${err.message}</p>`;
+  });
+</script>
+
+</body>
+</html>
