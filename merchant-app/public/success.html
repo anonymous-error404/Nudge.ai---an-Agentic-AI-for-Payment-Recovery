@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Successful — TechZone</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
 <nav>
-  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
   <div class="nav-links">
     <a href="/">Store</a>
     <a href="/admin">Admin Panel</a>
@@ -18,7 +19,7 @@
 
 <div class="container">
   <div class="success-card">
-    <div class="success-icon">🎉</div>
+    <div class="success-icon"><i data-lucide="party-popper"></i></div>
     <h1>Payment Successful!</h1>
     <p>Your order has been placed and payment captured successfully.</p>
 
@@ -26,7 +27,7 @@
       Loading payment details…
     </div>
 
-    <a href="/" class="btn btn-primary" style="text-decoration:none;">
+    <a href="/" class="btn btn-primary btn-block" style="text-decoration:none;">
       ← Continue Shopping
     </a>
     <br />
@@ -40,19 +41,25 @@
   const params = new URLSearchParams(window.location.search);
   const paymentId = params.get('payment_id');
   const orderId = params.get('order_id');
+  const isSimulated = params.get('simulated') === '1';
 
   const details = document.getElementById('payment-details');
+  const simBadge = isSimulated
+    ? `<div style="margin-top:1rem; margin-bottom:0.25rem; display:inline-block; background:rgba(67, 97, 238, 0.16); color:var(--accent-2); padding:0.25rem 0.7rem; border-radius:100px; font-size:0.72rem; font-weight:700; border:1px solid rgba(67, 97, 238, 0.3);">🧪 SIMULATED PAYMENT</div>`
+    : '';
+
   if (paymentId && orderId) {
     details.innerHTML = `
-      <div style="margin-bottom:0.5rem;">Payment ID</div>
+      <div class="pid-label">Payment ID</div>
       <strong>${paymentId}</strong>
-      <div style="margin-top:0.75rem; margin-bottom:0.25rem;">Razorpay Order ID</div>
+      <div class="pid-label" style="margin-top:0.75rem;">Razorpay Order ID</div>
       <strong>${orderId}</strong>
+      ${simBadge}
     `;
   } else {
     details.textContent = 'Payment details not available.';
   }
 </script>
-
+<script>lucide.createIcons();</script>
 </body>
 </html>

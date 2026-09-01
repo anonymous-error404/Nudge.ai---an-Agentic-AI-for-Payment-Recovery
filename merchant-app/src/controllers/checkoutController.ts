@@ -9,9 +9,51 @@ import { paymentRepository } from "../repositories/paymentRepository";
 import { failureEventRepository } from "../repositories/failureEventRepository";
 import { failureClassifierService } from "../services/failureClassifierService";
 import { handlePaymentFailure } from "../services/recoveryOrchestrator";
+import { failureSimulatorService } from "../services/failureSimulatorService";
 import crypto from "crypto";
 
 class CheckoutController {
+  async simulateCheckout(req: Request, res: Response) {
+    const { productId, customerId, outcome, scenarioKey } = req.body as {
+      productId?: string;
+      customerId?: string;
+      outcome?: "success" | "fail";
+      scenarioKey?: string;
+    };
+
+    if (!productId || !customerId || !outcome) {
+      return res.status(400).json({
+        success: false,
+        error: "productId, customerId, and outcome are required",
+      });
+    }
+
+    if (!["success", "fail"].includes(outcome)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "outcome must be 'success' or 'fail'" });
+    }
+
+    try {
+      const result = await failureSimulatorService.simulateCheckout({
+        productId,
+        customerId,
+        outcome: outcome as "success" | "fail",
+        scenarioKey,
+      });
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      console.error("Error in simulateCheckout:", err);
+      const status =
+        err.message.includes("not found") ||
+        err.message.includes("required") ||
+        err.message.includes("out of stock")
+          ? 400
+          : 500;
+      res.status(status).json({ success: false, error: err.message });
+    }
+  }
+
   async checkout(req: Request, res: Response) {
     const { productId, customerId } = req.body as {
       productId?: string;
@@ -19,12 +61,10 @@ class CheckoutController {
     };
 
     if (!productId || !customerId) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "productId and customerId are required",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "productId and customerId are required",
+      });
     }
 
     try {
@@ -120,12 +160,10 @@ class CheckoutController {
       req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Missing payment verification parameters",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Missing payment verification parameters",
+      });
     }
 
     try {
@@ -136,12 +174,10 @@ class CheckoutController {
         .digest("hex");
 
       if (expectedSignature !== razorpay_signature) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "Payment signature verification failed",
-          });
+        return res.status(400).json({
+          success: false,
+          error: "Payment signature verification failed",
+        });
       }
 
       const order = await orderRepository.findByRazorpayId(razorpay_order_id);

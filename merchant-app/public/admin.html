@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin Panel — TechZone Recovery Agent</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
 <nav>
-  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
   <div class="nav-links">
     <a href="/">Store</a>
     <a href="/admin">Admin Panel</a>
@@ -17,7 +18,7 @@
 </nav>
 
 <div class="container">
-  <h1 style="margin-bottom:0.25rem;">Recovery Agent Dashboard</h1>
+  <h1 style="margin-bottom:0.25rem; letter-spacing:-0.02em; font-weight:800;">Recovery Agent Dashboard</h1>
   <p style="color: var(--text-muted); margin-bottom: 2rem; font-size:0.9rem;">
     Live view of orders, failures, and recovery actions · Auto-refreshes every 10s
   </p>
@@ -32,39 +33,10 @@
     <div class="stat-card accent"><div class="label">At Risk (₹)</div><div class="value" id="s-atrisk">—</div></div>
   </div>
 
-  <!-- Failure Simulator -->
-  <div class="section-title">🧪 Failure Simulator</div>
-  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 2rem;">
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">
-      Fires a real signed <code>payment.failed</code> webhook payload at the server for each failure type —
-      tests the full pipeline: signature verify → classify → failure_event → handlePaymentFailure().
-    </p>
 
-    <!-- Scenario buttons — loaded dynamically -->
-    <div id="sim-buttons" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem;">
-      <div class="spinner" style="width:20px; height:20px; border-width:2px;"></div>
-    </div>
-
-    <!-- Result log -->
-    <div id="sim-log" style="display:none;">
-      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Last simulation result:</div>
-      <div id="sim-result" style="
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 1rem;
-        font-family: monospace;
-        font-size: 0.8rem;
-        color: var(--text);
-        white-space: pre-wrap;
-        max-height: 260px;
-        overflow-y: auto;
-      "></div>
-    </div>
-  </div>
 
   <!-- Failure Events Table -->
-  <div class="section-title">🚨 Failure Events &amp; Recovery Actions</div>
+  <div class="section-title"><i data-lucide="siren"></i> Failure Events &amp; Recovery Actions</div>
   <div id="failure-loading" class="loading" style="padding:2rem;">
     <div class="spinner"></div><p>Loading…</p>
   </div>
@@ -86,7 +58,7 @@
   </div>
 
   <!-- All Orders Table -->
-  <div class="section-title" style="margin-top:2.5rem;">📦 All Orders</div>
+  <div class="section-title" style="margin-top:2.5rem;"><i data-lucide="package"></i> All Orders</div>
   <div id="orders-loading" class="loading" style="padding:2rem;">
     <div class="spinner"></div><p>Loading…</p>
   </div>
@@ -227,106 +199,9 @@
   loadData().catch(console.error);
   setInterval(() => loadData().catch(console.error), 10000);
 
-  // ── Failure Simulator ──────────────────────────────────────────────────────
 
-  const RECOVERY_COLOR = {
-    immediate: '#4cc9f0',
-    delayed:   '#f8961e',
-    none:      '#f72585',
-  };
 
-  async function loadSimulatorButtons() {
-    const res = await fetch('/api/dev/failure-scenarios');
-    const { data: scenarios } = await res.json();
-    const container = document.getElementById('sim-buttons');
-    container.innerHTML = scenarios.map(s => `
-      <button
-        onclick="simulate('${s.key}')"
-        title="${s.description}"
-        style="
-          padding: 0.6rem 1rem;
-          background: var(--surface-2);
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          color: var(--text);
-          cursor: pointer;
-          font-size: 0.85rem;
-          font-weight: 600;
-          transition: all 0.2s;
-        "
-        onmouseover="this.style.borderColor='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border)'"
-        id="sim-btn-${s.key}"
-      >
-        ${methodIcon(s.method)} ${s.label}
-      </button>
-    `).join('');
-  }
-
-  function methodIcon(method) {
-    return method === 'upi' ? '📱' : '💳';
-  }
-
-  async function simulate(failureType) {
-    const btn = document.getElementById(`sim-btn-${failureType}`);
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
-
-    const logEl = document.getElementById('sim-log');
-    const resultEl = document.getElementById('sim-result');
-    logEl.style.display = 'block';
-    resultEl.textContent = '⏳ Simulating…';
-
-    try {
-      const res = await fetch('/api/dev/simulate-failure', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ failureType }),
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        resultEl.textContent = '❌ Error: ' + (data.error || 'Unknown error');
-        return;
-      }
-
-      const d = data.data;
-      const fe = d.failureEvent;
-      const recoveryType = fe?.recoveryActions?.[0] ? (
-        ['retry_payment'].includes(fe.recoveryActions[0].actionType) ? 'immediate' :
-        fe.recoveryActions[0].actionType === 'do_nothing' ? 'none' : 'delayed'
-      ) : '—';
-
-      resultEl.innerHTML = [
-        `<span style="color:#4cc9f0">✅ ${d.scenario.label}</span>`,
-        ``,
-        `📦 Order:    ${d.order.id}  (${formatINR(d.order.amount)})`,
-        `💳 Payment:  ${d.payment.id}`,
-        `🏷️  Category: ${fe?.classifiedCategory ?? '—'}`,
-        ``,
-        `🤖 Recovery Decision:`,
-        fe?.recoveryActions?.length
-          ? fe.recoveryActions.map(a =>
-              `   action=${a.actionType}  outcome=${a.outcome}  attempt=#${a.attemptNumber}\n   reasoning: ${a.agentReasoning ?? '—'}`
-            ).join('\n')
-          : '   (no action logged yet — check logs)',
-        ``,
-        `💡 Expected: ${d.scenario.expectedRecovery}`,
-      ].join('\n');
-
-      // Refresh the tables so new failure event shows immediately
-      loadData().catch(console.error);
-
-    } catch (err) {
-      resultEl.textContent = '❌ ' + err.message;
-    } finally {
-      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-    }
-  }
-
-  // Expose simulate globally (called from inline onclick)
-  window.simulate = simulate;
-
-  loadSimulatorButtons().catch(console.error);
+  lucide.createIcons();
 </script>
 
 </body>

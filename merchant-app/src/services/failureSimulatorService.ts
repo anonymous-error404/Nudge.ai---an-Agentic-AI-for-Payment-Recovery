@@ -14,7 +14,8 @@ export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
     description: "UPI debit fails — account balance too low at time of payment",
     method: "upi",
     errorCode: "BAD_REQUEST_ERROR",
-    errorDescription: "Your payment failed because of insufficient funds. Please try again with another payment method.",
+    errorDescription:
+      "Your payment failed because of insufficient funds. Please try again with another payment method.",
     errorSource: "customer",
     errorStep: "payment_authentication",
     errorReason: "payment_failed",
@@ -35,7 +36,8 @@ export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
   },
   abandoned: {
     label: "Checkout Abandoned",
-    description: "Customer opened checkout but cancelled before completing payment",
+    description:
+      "Customer opened checkout but cancelled before completing payment",
     method: "upi",
     errorCode: "BAD_REQUEST_ERROR",
     errorDescription: "Payment cancelled by customer.",
@@ -47,22 +49,27 @@ export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
   },
   do_not_honor: {
     label: "Bank Do Not Honor",
-    description: "Issuing bank returned generic decline (DNH) during card authorization",
+    description:
+      "Issuing bank returned generic decline (DNH) during card authorization",
     method: "card",
     errorCode: "GATEWAY_ERROR",
-    errorDescription: "Your payment was declined by the bank. Please try again or use a different payment method.",
+    errorDescription:
+      "Your payment was declined by the bank. Please try again or use a different payment method.",
     errorSource: "bank",
     errorStep: "payment_authorization",
     errorReason: "payment_failed",
     expectedCategory: FailureCategory.DoNotHonor,
-    expectedRecovery: "delayed → send_notification (email: suggest alt. method)",
+    expectedRecovery:
+      "delayed → send_notification (email: suggest alt. method)",
   },
   psp_timeout: {
     label: "PSP / Network Timeout",
-    description: "Multi-hop PSP–NPCI–bank timeout; status unknown — must reconcile before retry",
+    description:
+      "Multi-hop PSP–NPCI–bank timeout; status unknown — must reconcile before retry",
     method: "upi",
     errorCode: "GATEWAY_ERROR",
-    errorDescription: "Payment failed due to a timeout between the payment gateway and bank. Please try again.",
+    errorDescription:
+      "Payment failed due to a timeout between the payment gateway and bank. Please try again.",
     errorSource: "gateway",
     errorStep: "payment_authorization",
     errorReason: "payment_failed",
@@ -83,14 +90,236 @@ class FailureSimulatorService {
     }));
   }
 
-  async simulateFailure(failureType: string, customerId?: string, productId?: string) {
+  /**
+   * Simulated checkout flow — called directly from the product page
+   * when the user selects "Simulate Payment" mode.
+   *
+   * If outcome = 'success': fakes a successful payment, marks order paid, redirects to /success
+   * If outcome = 'fail' + scenarioKey: runs the FULL failure pipeline
+   *   (classify → failure_event → handlePaymentFailure orchestrator → AI recovery decision)
+   *   and returns the decision so the frontend can react immediately.
+   */
+  async simulateCheckout(params: {
+    productId: string;
+    customerId: string;
+    outcome: "success" | "fail";
+    scenarioKey?: string;
+  }) {
+    const { productId, customerId, outcome, scenarioKey } = params;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+    });
+
+    if (!product) throw new Error("Product not found");
+    if (!customer) throw new Error("Customer not found");
+    if (product.stock <= 0) throw new Error("Product out of stock");
+
+    const fakeRazorpayOrderId = `order_ck_${outcome}_${Date.now()}`;
+    const order = await orderRepository.create({
+      customerId: customer.id,
+      productId: product.id,
+      amount: product.price,
+      status: "created",
+      razorpayOrderId: fakeRazorpayOrderId,
+    });
+
+    // ─── SUCCESS PATH ────────────────────────────────────────────────────────
+    if (outcome === "success") {
+      const fakeRazorpayPaymentId = `pay_ck_success_${Date.now()}`;
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "paid" },
+      });
+      await prisma.payment.upsert({
+        where: { razorpayPaymentId: fakeRazorpayPaymentId },
+        update: { status: "captured" },
+        create: {
+          orderId: order.id,
+          razorpayPaymentId: fakeRazorpayPaymentId,
+          status: "captured",
+          method: "upi",
+        },
+      });
+
+      console.log(
+        `✅ [Simulated Checkout] SUCCESS | order=${order.id} | payment=${fakeRazorpayPaymentId}`,
+      );
+      return {
+        outcome: "success" as const,
+        order: {
+          id: order.id,
+          razorpayOrderId: fakeRazorpayOrderId,
+          amount: product.price,
+        },
+        payment: { id: fakeRazorpayPaymentId },
+      };
+    }
+
+    // ─── FAILURE PATH ────────────────────────────────────────────────────────
+    if (!scenarioKey || !FAILURE_SCENARIOS[scenarioKey]) {
+      throw new Error(
+        `scenarioKey is required for outcome=fail. Valid: ${Object.keys(FAILURE_SCENARIOS).join(", ")}`,
+      );
+    }
+    const scenario = FAILURE_SCENARIOS[scenarioKey];
+    const fakeRazorpayPaymentId = `pay_ck_fail_${scenarioKey}_${Date.now()}`;
+
+    // 1. Upsert failed payment into our DB
+    const payment = await paymentRepository.upsertPayment({
+      orderId: order.id,
+      razorpayPaymentId: fakeRazorpayPaymentId,
+      status: "failed",
+      method: scenario.method,
+      errorCode: scenario.errorCode,
+      errorReason: scenario.errorReason,
+      errorSource: scenario.errorSource,
+      errorStep: scenario.errorStep,
+      errorDescription: scenario.errorDescription,
+    });
+
+    // 2. Mark order as failed
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "failed" },
+    });
+
+    // 3. Classify the failure
+    const { category, rootCause } = failureClassifierService.classify({
+      errorCode: scenario.errorCode,
+      errorReason: scenario.errorReason,
+      errorSource: scenario.errorSource,
+      errorStep: scenario.errorStep,
+      errorDescription: scenario.errorDescription,
+    });
+
+    // 4. Create failure event (idempotent)
+    const { event: failureEvent, isNew } =
+      await failureEventRepository.createIdempotent({
+        paymentId: payment.id,
+        category,
+        rootCause,
+      });
+
+    // 5. Run the recovery orchestrator
+    let recoveryDecision = null;
+    if (isNew && failureEvent) {
+      recoveryDecision = await handlePaymentFailure(
+        failureEvent.id,
+        category,
+        payment.id,
+      );
+    }
+
+    // 6. Also fire the signed webhook self-POST (same as original simulateFailure)
+    //    so the webhook pipeline + signature verification is still exercised.
+    const webhookSecret = process.env.WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const webhookPayload = {
+        entity: "event",
+        account_id: "acc_test_simulator",
+        event: "payment.failed",
+        contains: ["payment"],
+        payload: {
+          payment: {
+            entity: {
+              id: fakeRazorpayPaymentId,
+              entity: "payment",
+              amount: product.price,
+              currency: "INR",
+              status: "failed",
+              order_id: fakeRazorpayOrderId,
+              method: scenario.method,
+              error_code: scenario.errorCode,
+              error_description: scenario.errorDescription,
+              error_source: scenario.errorSource,
+              error_step: scenario.errorStep,
+              error_reason: scenario.errorReason,
+            },
+          },
+        },
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      const rawBody = JSON.stringify(webhookPayload);
+      const signature = crypto
+        .createHmac("sha256", webhookSecret)
+        .update(rawBody)
+        .digest("hex");
+      const port = process.env.PORT ?? 3000;
+      fetch(`http://localhost:${port}/webhook/razorpay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-razorpay-signature": signature,
+        },
+        body: rawBody,
+      }).catch((e) =>
+        console.warn("Simulated webhook self-POST skipped:", e.message),
+      );
+    }
+
+    // 7. Fetch full failure event + recovery actions for response
+    const failureEventFull = failureEvent
+      ? await failureEventRepository.getById(failureEvent.id)
+      : null;
+
+    console.log(
+      `🧪 [Simulated Checkout] FAIL | scenario=${scenarioKey} | order=${order.id} | payment=${fakeRazorpayPaymentId} | category=${category} | recovery=${recoveryDecision?.action ?? "—"}`,
+    );
+
+    return {
+      outcome: "fail" as const,
+      scenario: {
+        key: scenarioKey,
+        label: scenario.label,
+        expectedCategory: scenario.expectedCategory,
+        expectedRecovery: scenario.expectedRecovery,
+      },
+      category,
+      rootCause,
+      order: {
+        id: order.id,
+        razorpayOrderId: fakeRazorpayOrderId,
+        amount: product.price,
+      },
+      payment: { id: fakeRazorpayPaymentId, method: scenario.method },
+      recoveryDecision,
+      failureEvent: failureEventFull
+        ? {
+            id: failureEventFull.id,
+            classifiedCategory: failureEventFull.classifiedCategory,
+            recoveryActions: failureEventFull.recoveryActions.map((a) => ({
+              actionType: a.actionType,
+              channel: a.channel,
+              outcome: a.outcome,
+              attemptNumber: a.attemptNumber,
+              agentReasoning: a.agentReasoning,
+            })),
+          }
+        : null,
+    };
+  }
+
+  async simulateFailure(
+    failureType: string,
+    customerId?: string,
+    productId?: string,
+  ) {
     if (!FAILURE_SCENARIOS[failureType]) {
-      throw new Error(`Unknown failureType. Valid values: ${Object.keys(FAILURE_SCENARIOS).join(", ")}`);
+      throw new Error(
+        `Unknown failureType. Valid values: ${Object.keys(FAILURE_SCENARIOS).join(", ")}`,
+      );
     }
 
     const webhookSecret = process.env.WEBHOOK_SECRET;
     if (!webhookSecret) {
-      throw new Error("WEBHOOK_SECRET not set in .env — required to sign simulated webhook");
+      throw new Error(
+        "WEBHOOK_SECRET not set in .env — required to sign simulated webhook",
+      );
     }
 
     const scenario = FAILURE_SCENARIOS[failureType];
@@ -179,20 +408,29 @@ class FailureSimulatorService {
       errorDescription: scenario.errorDescription,
     });
 
-    const { event: failureEvent, isNew } = await failureEventRepository.createIdempotent({
-      paymentId: payment.id,
-      category,
-      rootCause,
-    });
+    const { event: failureEvent, isNew } =
+      await failureEventRepository.createIdempotent({
+        paymentId: payment.id,
+        category,
+        rootCause,
+      });
 
     let recoveryDecision = null;
     if (isNew && failureEvent) {
-      recoveryDecision = await handlePaymentFailure(failureEvent.id, category, payment.id);
+      recoveryDecision = await handlePaymentFailure(
+        failureEvent.id,
+        category,
+        payment.id,
+      );
     }
 
-    const failureEventFull = await failureEventRepository.getById(failureEvent!.id);
+    const failureEventFull = await failureEventRepository.getById(
+      failureEvent!.id,
+    );
 
-    console.log(`🧪 Simulated ${failureType} | order=${order.id} | payment=${fakePaymentId} | category=${category} | recovery=${recoveryDecision?.action}`);
+    console.log(
+      `🧪 Simulated ${failureType} | order=${order.id} | payment=${fakePaymentId} | category=${category} | recovery=${recoveryDecision?.action}`,
+    );
 
     return {
       scenario: {

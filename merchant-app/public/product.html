@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Buy Product — TechZone</title>
   <link rel="stylesheet" href="/style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
 <nav>
-  <a class="nav-brand" href="/">⚡ TechZone</a>
+  <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
   <div class="nav-links">
     <a href="/">Store</a>
     <a href="/admin">Admin Panel</a>
@@ -17,10 +18,20 @@
 </nav>
 
 <div class="container">
-  <div class="breadcrumb">
-    <a href="/">Store</a>
-    <span>/</span>
-    <span id="breadcrumb-name">Product</span>
+  <div class="page-header">
+    <div class="breadcrumb">
+      <a href="/">Store</a>
+      <span>/</span>
+      <span id="breadcrumb-name">Product</span>
+    </div>
+    
+    <div class="mode-toggle-wrap">
+      <span class="mode-label">Mode</span>
+      <div class="segmented-control" id="payment-mode-toggle" style="width: 200px; padding: 0.25rem;">
+        <button type="button" class="segment active" data-mode="simulate"><i data-lucide="flask-conical"></i> Demo</button>
+        <button type="button" class="segment" data-mode="real"><i data-lucide="lock"></i> Real</button>
+      </div>
+    </div>
   </div>
 
   <div id="loading" class="loading">
@@ -29,59 +40,112 @@
   </div>
 
   <div id="product-detail" class="product-detail" style="display:none;">
-    <div>
-      <img id="product-image" src="" alt="" />
-    </div>
-    <div>
-      <h1 id="product-name"></h1>
-      <p class="description" id="product-description"></p>
-      <div class="price" id="product-price"></div>
-      <div class="price-sub">+ free delivery · 1 year warranty</div>
 
-      <div class="customer-select" style="margin-top: 1.5rem;">
-        <label for="customer-select">👤 Shopping as:</label>
-        <select id="customer-select">
-          <option value="">Loading customers…</option>
-        </select>
-        <div style="font-size:0.78rem; color: var(--text-muted); margin-top: 0.3rem;">
-          Demo: choose any customer to simulate a purchase
-        </div>
+    <!-- LEFT: Image + Product Info stacked -->
+    <div class="product-left">
+      <div class="product-image-wrap">
+        <img id="product-image" src="" alt="" />
       </div>
+      <div class="product-info">
+        <h1 id="product-name"></h1>
+        <p class="description" id="product-description"></p>
+        <div class="price" id="product-price"></div>
+        <div class="price-sub">+ free delivery · 1 year warranty · 7-day return policy</div>
+      </div>
+    </div>
 
-      <button id="buy-btn" class="btn btn-primary" disabled>
-        🔒 Pay with Razorpay
-      </button>
+    <!-- RIGHT: Checkout Card only -->
+    <div class="product-right">
+      <div class="checkout-card">
 
-      <div style="margin-top:1rem; font-size:0.8rem; color: var(--text-muted); text-align:center;">
-        🛡️ Secure payment via Razorpay · Test mode enabled
+        <!-- Customer Select -->
+        <div class="form-group">
+          <label for="customer-select"><i data-lucide="user"></i> Shopping as</label>
+          <select id="customer-select">
+            <option value="">Loading customers…</option>
+          </select>
+        </div>
+
+        <!-- ═══════ SIMULATE MODE UI ═══════ -->
+        <div id="simulate-ui">
+
+          <!-- Payment Outcome — segmented toggle -->
+          <div class="form-group">
+            <label><i data-lucide="target"></i> Payment Outcome</label>
+            <div class="segmented-control" id="outcome-toggle">
+              <button type="button" class="segment outcome-success active" data-outcome="success">
+                <i data-lucide="check-circle"></i> Successful
+              </button>
+              <button type="button" class="segment outcome-fail" data-outcome="fail">
+                <i data-lucide="x-circle"></i> Failed
+              </button>
+            </div>
+          </div>
+
+          <!-- Failure Scenario Dropdown (only when fail selected) -->
+          <div class="form-group" id="scenario-group" style="display:none;">
+            <label for="scenario-select"><i data-lucide="alert-triangle"></i> Failure Scenario</label>
+            <select id="scenario-select">
+              <option value="">Loading scenarios…</option>
+            </select>
+            <div id="scenario-preview" class="scenario-preview"></div>
+          </div>
+
+          <button id="simulate-btn" class="btn btn-primary btn-block btn-lg" disabled>
+            <i data-lucide="shopping-cart"></i> Buy Now
+          </button>
+        </div>
+
+        <!-- ═══════ REAL MODE UI ═══════ -->
+        <div id="real-ui" style="display:none;">
+          <div class="real-mode-notice">
+            <strong>Test-mode credentials:</strong><br/>
+            Card success: <code>4111 1111 1111 1111</code><br/>
+            Card failure: <code>4000 0000 0000 0002</code><br/>
+            UPI success: <code>success@razorpay</code>
+          </div>
+          <button id="buy-btn" class="btn btn-primary btn-block btn-lg" disabled>
+            <i data-lucide="credit-card"></i> Pay with Razorpay
+          </button>
+        </div>
+
+        <div style="margin-top:1rem; font-size:0.78rem; color: var(--text-muted); text-align:center;">
+          <i data-lucide="shield-check"></i> Secure · Demo environment · Test data only
+        </div>
       </div>
     </div>
   </div>
 </div>
 
+
 <!-- Razorpay Checkout.js -->
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
   let productData = null;
+  let failureScenarios = [];
+  let selectedMode = 'simulate';
 
-  // ─── Load product ──────────────────────────────────────────────────────────
+  // ─── Load product + customers + failure scenarios ──────────────────────────
   const productId = new URLSearchParams(window.location.search).get('id');
 
-  async function loadProduct() {
+  async function loadPageData() {
     if (!productId) {
       document.getElementById('loading').innerHTML = '<p>No product ID in URL.</p>';
       return;
     }
 
-    const [productRes, customersRes] = await Promise.all([
+    const [productRes, customersRes, scenariosRes] = await Promise.all([
       fetch(`/api/products/${productId}`),
-      fetch('/api/customers')
+      fetch('/api/customers'),
+      fetch('/api/dev/failure-scenarios'),
     ]);
 
     const { data: product } = await productRes.json();
     const { data: customers } = await customersRes.json();
+    const { data: scenarios } = await scenariosRes.json();
 
     productData = product;
+    failureScenarios = scenarios;
 
     // Populate product UI
     document.getElementById('breadcrumb-name').textContent = product.name;
@@ -94,17 +158,163 @@
     img.alt = product.name;
 
     // Populate customer dropdown
-    const select = document.getElementById('customer-select');
-    select.innerHTML = customers.map(c =>
+    const customerSelect = document.getElementById('customer-select');
+    customerSelect.innerHTML = customers.map(c =>
       `<option value="${c.id}">${c.name} — ${c.email}</option>`
     ).join('');
+
+    // Populate scenario dropdown
+    const scenarioSelect = document.getElementById('scenario-select');
+    scenarioSelect.innerHTML = scenarios.map(s =>
+      `<option value="${s.key}" data-method="${s.method}" data-desc="${s.description}" data-recovery="${s.expectedRecovery}">${s.label} (${s.method.toUpperCase()})</option>`
+    ).join('');
+    updateScenarioPreview();
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('product-detail').style.display = 'grid';
     document.getElementById('buy-btn').disabled = false;
+    validateSimulateForm();
   }
 
-  // ─── Razorpay Checkout ─────────────────────────────────────────────────────
+  // ─── Payment Mode Toggle ───────────────────────────────────────────────────
+  document.getElementById('payment-mode-toggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.segment');
+    if (!btn) return;
+    selectedMode = btn.dataset.mode;
+
+    document.querySelectorAll('#payment-mode-toggle .segment').forEach(s =>
+      s.classList.toggle('active', s === btn)
+    );
+    // document.getElementById('mode-hint-simulate').style.display =
+    //   selectedMode === 'simulate' ? 'block' : 'none';
+    // document.getElementById('mode-hint-real').style.display =
+    //   selectedMode === 'real' ? 'block' : 'none';
+    document.getElementById('simulate-ui').style.display =
+      selectedMode === 'simulate' ? 'block' : 'none';
+    document.getElementById('real-ui').style.display =
+      selectedMode === 'real' ? 'block' : 'none';
+  });
+
+  // ─── Outcome Toggle ────────────────────────────────────────────────────────
+  let selectedOutcome = 'success';
+
+  document.getElementById('outcome-toggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.segment');
+    if (!btn) return;
+    selectedOutcome = btn.dataset.outcome;
+    document.querySelectorAll('#outcome-toggle .segment').forEach(s =>
+      s.classList.toggle('active', s === btn)
+    );
+    document.getElementById('scenario-group').style.display =
+      selectedOutcome === 'fail' ? 'block' : 'none';
+    validateSimulateForm();
+  });
+
+  document.getElementById('scenario-select').addEventListener('change', () => {
+    updateScenarioPreview();
+    validateSimulateForm();
+  });
+
+  function updateScenarioPreview() {
+    const sel = document.getElementById('scenario-select');
+    const opt = sel.options[sel.selectedIndex];
+    const preview = document.getElementById('scenario-preview');
+    if (opt && opt.value) {
+      preview.innerHTML = `
+        <div><span class="preview-label">Method:</span> ${(opt.dataset.method || '').toUpperCase()}</div>
+        <div><span class="preview-label">What happens:</span> ${opt.dataset.desc || '—'}</div>
+        <div><span class="preview-label">Expected recovery:</span> <code>${opt.dataset.recovery || '—'}</code></div>
+      `;
+    }
+  }
+
+  function validateSimulateForm() {
+    const customerId = document.getElementById('customer-select').value;
+    const scenarioKey = document.getElementById('scenario-select').value;
+    const btn = document.getElementById('simulate-btn');
+    const disabled = !customerId || (selectedOutcome === 'fail' && !scenarioKey);
+    btn.disabled = disabled;
+  }
+
+  document.getElementById('customer-select').addEventListener('change', validateSimulateForm);
+
+  // ─── Run Simulated Checkout ────────────────────────────────────────────────
+  document.getElementById('simulate-btn').addEventListener('click', async () => {
+    const customerId = document.getElementById('customer-select').value;
+    const outcome = selectedOutcome;
+    const scenarioKey = document.getElementById('scenario-select').value;
+
+    if (!customerId || !outcome) return;
+    if (outcome === 'fail' && !scenarioKey) return;
+
+    const btn = document.getElementById('simulate-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    
+    // Add spinner and processing text
+    btn.innerHTML = `<i data-lucide="loader-2" style="animation: spin 1s linear infinite;"></i> Processing…`;
+    lucide.createIcons();
+
+    try {
+      const res = await fetch('/api/checkout/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: productData.id, customerId, outcome, scenarioKey }),
+      });
+      
+      const { success, data, error } = await res.json();
+      if (!success) throw new Error(error || 'Simulation failed');
+
+      if (data.outcome === 'success') {
+        window.location.href = `/success?payment_id=${encodeURIComponent(data.payment.id)}&order_id=${encodeURIComponent(data.order.razorpayOrderId)}&simulated=1`;
+        return; // Keeps button disabled while navigating
+      }
+
+      // If simulated failure:
+      showFailureResult(data);
+
+    } catch (err) {
+      showToastHTML(`<div style="display:flex; align-items:center; gap:0.5rem; color:#f87171;"><i data-lucide="alert-circle"></i> <b>Error:</b> ${err.message}</div>`, 'error');
+    } finally {
+      // Re-enable button ONLY if it's not success (success navigates away)
+      if (outcome !== 'success') {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        lucide.createIcons();
+      }
+    }
+  });
+
+  function showFailureResult(data) {
+    const d = data;
+    const categoryLabel = d.scenario?.label || d.category || 'Payment Failed';
+    const msg = d.recoveryDecision?.message || `Failed due to ${categoryLabel}`;
+    
+    const toastContent = `
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem; color:#f87171;">
+        <i data-lucide="x-circle" style="width:1.25rem; height:1.25rem;"></i> 
+        <strong style="font-size:0.95rem;">Payment Failed</strong>
+      </div>
+      <div style="font-weight:400; line-height:1.4;">
+        ${msg}
+      </div>
+    `;
+    
+    showToastHTML(toastContent, 'error', 6000);
+  }
+
+  function showToastHTML(htmlContent, type, duration = 4000) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = htmlContent;
+    document.body.appendChild(toast);
+    lucide.createIcons({ root: toast });
+    setTimeout(() => toast.remove(), duration);
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ─── Real Razorpay Checkout (existing logic, kept) ─────────────────────────
   document.getElementById('buy-btn').addEventListener('click', async () => {
     const customerId = document.getElementById('customer-select').value;
     if (!customerId || !productData) return;
@@ -175,9 +385,6 @@
 
       rzp.on('payment.failed', async (response) => {
         console.error('Payment failed:', response.error);
-
-        // Tell the backend about this failure immediately (fast path).
-        // The backend will: classify → create failure_event → call handlePaymentFailure() → return decision.
         try {
           const failRes = await fetch('/api/payment/failed', {
             method: 'POST',
@@ -201,29 +408,20 @@
           const decision = failData?.data?.decision;
 
           if (decision?.recoveryType === 'immediate') {
-            // ── Immediate recovery ─────────────────────────────────────────────
-            // Failure types: wrong_pin, psp_timeout
-            // Action: re-open the checkout modal right now
             showToast('⚠️ ' + decision.message + ' Retrying…', 'error');
             btn.textContent = '🔄 Retrying…';
-
-            // Short delay so the toast is readable, then re-open
             setTimeout(() => {
               btn.disabled = false;
               btn.textContent = '🔒 Pay with Razorpay';
-              rzp.open(); // Re-open the same checkout modal
+              rzp.open();
             }, 1500);
-
           } else {
-            // ── Delayed recovery or no-retry ──────────────────────────────────
-            // Failure types: insufficient_funds, abandoned, do_not_honor, fraud_block
             const msg = decision?.message || ('Payment failed: ' + response.error.description);
             showToast(msg, 'error');
             btn.disabled = false;
             btn.textContent = '🔒 Pay with Razorpay';
           }
         } catch (err) {
-          // If our backend call fails, fall back to a basic error message
           console.error('Failed to report payment failure to backend:', err);
           showToast('Payment failed: ' + response.error.description, 'error');
           btn.disabled = false;
@@ -248,9 +446,12 @@
     setTimeout(() => toast.remove(), 4000);
   }
 
-  loadProduct().catch(err => {
+  loadPageData().catch(err => {
     document.getElementById('loading').innerHTML = `<p>Error: ${err.message}</p>`;
   });
+
+  // Initialize Lucide icons
+  lucide.createIcons();
 </script>
 
 </body>

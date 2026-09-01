@@ -78,61 +78,71 @@ async function main() {
   const products = await Promise.all([
     prisma.product.upsert({
       where: { id: "prod_001" },
-      update: {},
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop"
+      },
       create: {
         id: "prod_001",
         name: "Wireless Noise-Cancelling Headphones",
         description: "Premium over-ear headphones with 30hr battery life and active noise cancellation.",
         price: 799900, // ₹7,999
-        imageUrl: "https://placehold.co/400x300/1a1a2e/ffffff?text=Headphones",
+        imageUrl: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop",
         stock: 50,
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_002" },
-      update: {},
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=800&auto=format&fit=crop"
+      },
       create: {
         id: "prod_002",
         name: "Mechanical Gaming Keyboard",
         description: "RGB backlit mechanical keyboard with tactile switches and anti-ghosting.",
         price: 349900, // ₹3,499
-        imageUrl: "https://placehold.co/400x300/16213e/ffffff?text=Keyboard",
+        imageUrl: "https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=800&auto=format&fit=crop",
         stock: 30,
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_003" },
-      update: {},
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop"
+      },
       create: {
         id: "prod_003",
         name: "Smart Watch Pro",
         description: "Health monitoring smartwatch with GPS, SpO2, and 7-day battery.",
         price: 1299900, // ₹12,999
-        imageUrl: "https://placehold.co/400x300/0f3460/ffffff?text=SmartWatch",
+        imageUrl: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop",
         stock: 25,
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_004" },
-      update: {},
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1621330396173-e41b1cafd17f?q=80&w=800&auto=format&fit=crop"
+      },
       create: {
         id: "prod_004",
         name: "USB-C Hub 7-in-1",
         description: "Multi-port hub with HDMI, USB 3.0, SD card, and 100W PD charging.",
         price: 149900, // ₹1,499
-        imageUrl: "https://placehold.co/400x300/533483/ffffff?text=USB+Hub",
+        imageUrl: "https://images.unsplash.com/photo-1621330396173-e41b1cafd17f?q=80&w=800&auto=format&fit=crop",
         stock: 100,
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_005" },
-      update: {},
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?q=80&w=800&auto=format&fit=crop"
+      },
       create: {
         id: "prod_005",
         name: "Portable SSD 1TB",
         description: "Ultra-fast portable SSD with 1050MB/s read speeds and shock resistance.",
         price: 599900, // ₹5,999
-        imageUrl: "https://placehold.co/400x300/e94560/ffffff?text=SSD",
+        imageUrl: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?q=80&w=800&auto=format&fit=crop",
         stock: 40,
       },
     }),
