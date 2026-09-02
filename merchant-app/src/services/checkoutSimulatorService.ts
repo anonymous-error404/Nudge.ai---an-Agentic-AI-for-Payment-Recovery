@@ -5,7 +5,6 @@ import { orderRepository } from "../repositories/orderRepository";
 import { paymentRepository } from "../repositories/paymentRepository";
 import { failureEventRepository } from "../repositories/failureEventRepository";
 import { failureClassifierService } from "./failureClassifierService";
-import { handlePaymentFailure } from "./recoveryOrchestrator";
 import crypto from "crypto";
 
 export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
@@ -78,7 +77,7 @@ export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
   },
 };
 
-class FailureSimulatorService {
+class CheckoutSimulatorService {
   getScenarios() {
     return Object.entries(FAILURE_SCENARIOS).map(([key, s]) => ({
       key,
@@ -90,15 +89,6 @@ class FailureSimulatorService {
     }));
   }
 
-  /**
-   * Simulated checkout flow — called directly from the product page
-   * when the user selects "Simulate Payment" mode.
-   *
-   * If outcome = 'success': fakes a successful payment, marks order paid, redirects to /success
-   * If outcome = 'fail' + scenarioKey: runs the FULL failure pipeline
-   *   (classify → failure_event → handlePaymentFailure orchestrator → AI recovery decision)
-   *   and returns the decision so the frontend can react immediately.
-   */
   async simulateCheckout(params: {
     productId: string;
     customerId: string;
@@ -123,14 +113,19 @@ class FailureSimulatorService {
     const totalAmount = product.price * quantity;
 
     // ── Idempotency: reuse an existing open order for same customer+product ──
-    let existingOrder = await orderRepository.findOpenOrderForCustomerProduct(customer.id, product.id);
+    let existingOrder = await orderRepository.findOpenOrderForCustomerProduct(
+      customer.id,
+      product.id,
+    );
 
     let order: any;
     let fakeRazorpayOrderId: string;
 
     if (existingOrder && existingOrder.quantity === quantity) {
       // Reuse — refresh amount to current price
-      console.log(`🔄 [Simulated Checkout] Reusing open order ${existingOrder.id}`);
+      console.log(
+        `🔄 [Simulated Checkout] Reusing open order ${existingOrder.id}`,
+      );
       fakeRazorpayOrderId = `order_ck_${outcome}_${Date.now()}`;
       order = await orderRepository.update(existingOrder.id, {
         amount: totalAmount,
@@ -152,24 +147,52 @@ class FailureSimulatorService {
     // ─── SUCCESS PATH ────────────────────────────────────────────────────────
     if (outcome === "success") {
       const fakeRazorpayPaymentId = `pay_ck_success_${Date.now()}`;
+      const webhookSecret = process.env.WEBHOOK_SECRET;
 
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { status: "paid" },
-      });
-      await prisma.payment.upsert({
-        where: { razorpayPaymentId: fakeRazorpayPaymentId },
-        update: { status: "captured" },
-        create: {
-          orderId: order.id,
-          razorpayPaymentId: fakeRazorpayPaymentId,
-          status: "captured",
-          method: "upi",
-        },
-      });
+      if (webhookSecret) {
+        const webhookPayload = {
+          entity: "event",
+          account_id: "acc_test_simulator",
+          event: "payment.captured",
+          contains: ["payment"],
+          payload: {
+            payment: {
+              entity: {
+                id: fakeRazorpayPaymentId,
+                entity: "payment",
+                amount: totalAmount,
+                currency: "INR",
+                status: "captured",
+                order_id: fakeRazorpayOrderId,
+                method: "upi",
+              },
+            },
+          },
+          created_at: Math.floor(Date.now() / 1000),
+        };
+        const rawBody = JSON.stringify(webhookPayload);
+        const signature = crypto
+          .createHmac("sha256", webhookSecret)
+          .update(rawBody)
+          .digest("hex");
+        const port = process.env.PORT ?? 3000;
+        fetch(`http://localhost:${port}/webhook/razorpay`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-razorpay-signature": signature,
+          },
+          body: rawBody,
+        }).catch((e) =>
+          console.warn(
+            "Simulated success webhook self-POST skipped:",
+            e.message,
+          ),
+        );
+      }
 
       console.log(
-        `✅ [Simulated Checkout] SUCCESS | order=${order.id} | payment=${fakeRazorpayPaymentId}`,
+        `✅ [Simulated Checkout] SUCCESS | order=${order.id} | payment=${fakeRazorpayPaymentId} | webhook_fired`,
       );
       return {
         outcome: "success" as const,
@@ -228,18 +251,9 @@ class FailureSimulatorService {
         rootCause,
       });
 
-    // 5. Run the recovery orchestrator
-    let recoveryDecision = null;
-    if (isNew && failureEvent) {
-      recoveryDecision = await handlePaymentFailure(
-        failureEvent.id,
-        category,
-        payment.id,
-      );
-    }
-
-    // 6. Also fire the signed webhook self-POST (same as original simulateFailure)
-    //    so the webhook pipeline + signature verification is still exercised.
+    // 5. Fire the signed webhook self-POST — the webhook handler owns the full
+    //    classify → failure_event → orchestrator → AI recovery pipeline.
+    //    We MUST NOT call handlePaymentFailure directly here to avoid double-execution.
     const webhookSecret = process.env.WEBHOOK_SECRET;
     if (webhookSecret) {
       const webhookPayload = {
@@ -285,13 +299,13 @@ class FailureSimulatorService {
       );
     }
 
-    // 7. Fetch full failure event + recovery actions for response
+    // 6. Fetch full failure event for response (recovery decision logged async by webhook)
     const failureEventFull = failureEvent
       ? await failureEventRepository.getById(failureEvent.id)
       : null;
 
     console.log(
-      `🧪 [Simulated Checkout] FAIL | scenario=${scenarioKey} | order=${order.id} | payment=${fakeRazorpayPaymentId} | category=${category} | recovery=${recoveryDecision ? "ai_handled" : "—"}`,
+      `🧪 [Simulated Checkout] FAIL | scenario=${scenarioKey} | order=${order.id} | payment=${fakeRazorpayPaymentId} | category=${category} | recovery=webhook_triggered`,
     );
 
     return {
@@ -311,7 +325,7 @@ class FailureSimulatorService {
         amount: totalAmount,
       },
       payment: { id: fakeRazorpayPaymentId, method: scenario.method },
-      recoveryDecision,
+      recoveryDecision: null, // AI runs async via webhook; check /api/orders or Prisma Studio
       failureEvent: failureEventFull
         ? {
             id: failureEventFull.id,
@@ -327,165 +341,6 @@ class FailureSimulatorService {
         : null,
     };
   }
-
-  async simulateFailure(
-    failureType: string,
-    customerId?: string,
-    productId?: string,
-  ) {
-    if (!FAILURE_SCENARIOS[failureType]) {
-      throw new Error(
-        `Unknown failureType. Valid values: ${Object.keys(FAILURE_SCENARIOS).join(", ")}`,
-      );
-    }
-
-    const webhookSecret = process.env.WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      throw new Error(
-        "WEBHOOK_SECRET not set in .env — required to sign simulated webhook",
-      );
-    }
-
-    const scenario = FAILURE_SCENARIOS[failureType];
-
-    const customer = customerId
-      ? await prisma.customer.findUnique({ where: { id: customerId } })
-      : await prisma.customer.findFirst({ orderBy: { createdAt: "asc" } });
-
-    const product = productId
-      ? await prisma.product.findUnique({ where: { id: productId } })
-      : await prisma.product.findFirst({ orderBy: { createdAt: "asc" } });
-
-    if (!customer || !product) {
-      throw new Error("Customer or product not found");
-    }
-
-    const fakeRazorpayOrderId = `order_sim_${failureType}_${Date.now()}`;
-    const order = await orderRepository.create({
-      customerId: customer.id,
-      productId: product.id,
-      amount: product.price,
-      status: "created",
-      razorpayOrderId: fakeRazorpayOrderId,
-    });
-
-    const fakePaymentId = `pay_sim_${failureType}_${Date.now()}`;
-    const webhookPayload = {
-      entity: "event",
-      account_id: "acc_test_simulator",
-      event: "payment.failed",
-      contains: ["payment"],
-      payload: {
-        payment: {
-          entity: {
-            id: fakePaymentId,
-            entity: "payment",
-            amount: product.price,
-            currency: "INR",
-            status: "failed",
-            order_id: fakeRazorpayOrderId,
-            method: scenario.method,
-            error_code: scenario.errorCode,
-            error_description: scenario.errorDescription,
-            error_source: scenario.errorSource,
-            error_step: scenario.errorStep,
-            error_reason: scenario.errorReason,
-          },
-        },
-      },
-      created_at: Math.floor(Date.now() / 1000),
-    };
-
-    const rawBody = JSON.stringify(webhookPayload);
-    const signature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(rawBody)
-      .digest("hex");
-
-    const port = process.env.PORT ?? 3000;
-    fetch(`http://localhost:${port}/webhook/razorpay`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-razorpay-signature": signature,
-      },
-      body: rawBody,
-    }).catch((e) => console.warn("Simulator webhook self-POST error:", e));
-
-    const payment = await paymentRepository.upsertPayment({
-      orderId: order.id,
-      razorpayPaymentId: fakePaymentId,
-      status: "failed",
-      method: scenario.method,
-      errorCode: scenario.errorCode,
-      errorReason: scenario.errorReason,
-      errorSource: scenario.errorSource,
-      errorStep: scenario.errorStep,
-      errorDescription: scenario.errorDescription,
-    });
-
-    const { category, rootCause } = failureClassifierService.classify({
-      errorCode: scenario.errorCode,
-      errorReason: scenario.errorReason,
-      errorSource: scenario.errorSource,
-      errorStep: scenario.errorStep,
-      errorDescription: scenario.errorDescription,
-    });
-
-    const { event: failureEvent, isNew } =
-      await failureEventRepository.createIdempotent({
-        orderId: order.id,
-        paymentId: payment.id,
-        category,
-        rootCause,
-      });
-
-    let recoveryDecision = null;
-    if (isNew && failureEvent) {
-        recoveryDecision = await handlePaymentFailure(
-        failureEvent.id,
-        category,
-        payment.id,
-      );
-    }
-
-    const failureEventFull = await failureEventRepository.getById(
-      failureEvent!.id,
-    );
-
-    console.log(
-      `🧪 Simulated ${failureType} | order=${order.id} | payment=${fakePaymentId} | category=${category} | recovery=${recoveryDecision ? "ai_handled" : "none"}`,
-    );
-
-    return {
-      scenario: {
-        failureType,
-        label: scenario.label,
-        expectedCategory: scenario.expectedCategory,
-        expectedRecovery: scenario.expectedRecovery,
-      },
-      order: {
-        id: order.id,
-        razorpayOrderId: fakeRazorpayOrderId,
-        amount: product.price,
-      },
-      payment: { id: fakePaymentId },
-      recoveryDecision,
-      failureEvent: failureEventFull
-        ? {
-            id: failureEventFull.id,
-            classifiedCategory: failureEventFull.classifiedCategory,
-            rootCause: failureEventFull.rootCause,
-            recoveryActions: failureEventFull.recoveryActions.map((a) => ({
-              actionType: a.actionType,
-              outcome: a.outcome,
-              attemptNumber: a.attemptNumber,
-              agentReasoning: a.agentReasoning,
-            })),
-          }
-        : null,
-    };
-  }
 }
 
-export const failureSimulatorService = new FailureSimulatorService();
+export const checkoutSimulatorService = new CheckoutSimulatorService();

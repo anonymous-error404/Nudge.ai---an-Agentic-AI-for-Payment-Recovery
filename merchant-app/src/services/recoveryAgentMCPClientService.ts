@@ -45,7 +45,7 @@ async function buildFailureContext(
   if (!event) throw new Error(`Failure event not found: ${failureEventId}`);
 
   const order = event.payment?.order;
-  
+
   const previousActions = order
     ? await failureEventRepository.getRecoveryActionsByOrderId(order.id)
     : [];
@@ -83,16 +83,15 @@ async function buildFailureContext(
 // ─── MCPClient class ──────────────────────────────────────────────────────────
 
 class MCPClient {
-  /**
-   * Submit a delayed recovery job to the MCP server.
-   * Returns immediately with a jobId (fire-and-forget for delayed cases).
-   * The result comes back via the /mcp/job-complete callback.
-   */
   async submitRecoveryJob(
     failureEventId: string,
     category: FailureCategory,
     paymentId: string,
-  ): Promise<{ uiMessage?: string; smsMessage?: string; followUpScheduleId?: string }> {
+  ): Promise<{
+    uiMessage?: string;
+    smsMessage?: string;
+    followUpScheduleId?: string;
+  }> {
     const context = await buildFailureContext(
       failureEventId,
       category,
@@ -108,7 +107,9 @@ class MCPClient {
     };
 
     try {
-      console.log(`📡 Sending failure context to MCP Server: event=${failureEventId}`);
+      console.log(
+        `📡 Sending failure context to MCP Server: event=${failureEventId}`,
+      );
       const response = await fetch(`${MCP_SERVER_URL}/api/recovery-jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,7 +117,9 @@ class MCPClient {
       });
 
       if (!response.ok) {
-        throw new Error(`MCP Server error: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `MCP Server error: ${response.status} ${response.statusText}`,
+        );
       }
 
       const data = await response.json();

@@ -37,10 +37,14 @@ class WebhookService {
     if (!payload) return;
 
     const razorpayOrderId = payload.order_id;
-    const order = razorpayOrderId ? await orderRepository.findByRazorpayId(razorpayOrderId) : null;
+    const order = razorpayOrderId
+      ? await orderRepository.findByRazorpayId(razorpayOrderId)
+      : null;
 
     if (!order) {
-      console.warn(`⚠️  No local order found for razorpay_order_id: ${razorpayOrderId}`);
+      console.warn(
+        `⚠️  No local order found for razorpay_order_id: ${razorpayOrderId}`,
+      );
       return;
     }
 
@@ -68,18 +72,23 @@ class WebhookService {
       errorDescription: payload.error_description,
     });
 
-    const { event: failureEvent, isNew } = await failureEventRepository.createIdempotent({
-      orderId: order.id,
-      paymentId: payment.id,
-      category,
-      rootCause,
-    });
+    const { event: failureEvent, isNew } =
+      await failureEventRepository.createIdempotent({
+        orderId: order.id,
+        paymentId: payment.id,
+        category,
+        rootCause,
+      });
 
     if (isNew && failureEvent) {
       await handlePaymentFailure(failureEvent.id, category, payment.id);
-      console.log(`💥 Webhook: payment failed + orchestrator invoked: payment=${payload.id} | category=${category} | order=${order.id}`);
+      console.log(
+        `💥 Webhook: payment failed + orchestrator invoked: payment=${payload.id} | category=${category} | order=${order.id}`,
+      );
     } else {
-      console.log(`💥 Webhook: payment failed (duplicate webhook or already handled by frontend): payment=${payload.id} | category=${category}`);
+      console.log(
+        `💥 Webhook: payment failed (duplicate webhook or already handled by frontend): payment=${payload.id} | category=${category}`,
+      );
     }
   }
 
@@ -87,7 +96,10 @@ class WebhookService {
     const payload = event.payload.payment?.entity;
     if (!payload || !payload.order_id) return;
 
-    await orderRepository.updateStatusByRazorpayId(payload.order_id, "attempted");
+    await orderRepository.updateStatusByRazorpayId(
+      payload.order_id,
+      "attempted",
+    );
     const order = await orderRepository.findByRazorpayId(payload.order_id);
     if (order) {
       await paymentRepository.upsertPayment({
@@ -116,7 +128,9 @@ class WebhookService {
       method: payload.method,
     });
 
-    console.log(`💰 Payment captured: ${payload.id} — order ${order.id} marked paid`);
+    console.log(
+      `💰 Payment captured: ${payload.id} — order ${order.id} marked paid`,
+    );
   }
 
   private async handleOrderPaid(event: RazorpayWebhookEvent) {

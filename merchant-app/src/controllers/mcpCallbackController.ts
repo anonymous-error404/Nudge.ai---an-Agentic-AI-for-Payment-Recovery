@@ -20,25 +20,35 @@ class McpCallbackController {
     };
 
     if (!jobId || !tool || !args) {
-      return res.status(400).json({ success: false, error: "jobId, tool, and args are required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "jobId, tool, and args are required" });
     }
 
     try {
       const result = await executeTool(tool, args);
-      
+
       // Log the recovery action in the merchant DB (except context gathering)
-      if (failureEventId && tool !== "query_failure_context" && tool !== "draft_notification_copy") {
-        await import("../lib/prismaClient").then(({ prisma }) => 
-          prisma.recoveryAction.create({
-            data: {
-              failureEventId,
-              actionType: tool,
-              channel: args.channel ? String(args.channel) : null,
-              outcome: result.success === false ? "failed" : "success",
-              agentReasoning: result.message ? String(result.message) : null,
-            }
-          })
-        ).catch(e => console.warn("Failed to log recovery action in merchant DB:", e));
+      if (
+        failureEventId &&
+        tool !== "query_failure_context" &&
+        tool !== "draft_notification_copy"
+      ) {
+        await import("../lib/prismaClient")
+          .then(({ prisma }) =>
+            prisma.recoveryAction.create({
+              data: {
+                failureEventId,
+                actionType: tool,
+                channel: args.channel ? String(args.channel) : null,
+                outcome: result.success === false ? "failed" : "success",
+                agentReasoning: result.message ? String(result.message) : null,
+              },
+            }),
+          )
+          .catch((e) =>
+            console.warn("Failed to log recovery action in merchant DB:", e),
+          );
       }
 
       return res.status(200).json({ success: true, data: result });
@@ -54,19 +64,24 @@ class McpCallbackController {
    * all tools have been executed. Update our merchant DB accordingly.
    */
   async handleJobComplete(req: Request, res: Response) {
-    const { jobId, actionType, outcome, agentReasoning, notificationContent } = req.body as {
-      jobId: string;
-      actionType: string | null;
-      outcome: string;
-      agentReasoning: string | null;
-      notificationContent?: string | null;
-    };
+    const { jobId, actionType, outcome, agentReasoning, notificationContent } =
+      req.body as {
+        jobId: string;
+        actionType: string | null;
+        outcome: string;
+        agentReasoning: string | null;
+        notificationContent?: string | null;
+      };
 
     if (!jobId) {
-      return res.status(400).json({ success: false, error: "jobId is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "jobId is required" });
     }
 
-    res.status(200).json({ success: true, message: "Job completion acknowledged" });
+    res
+      .status(200)
+      .json({ success: true, message: "Job completion acknowledged" });
 
     // Update the merchant-side recovery_action row with the final outcome
     try {
@@ -84,7 +99,7 @@ class McpCallbackController {
       }
 
       console.log(
-        `\n🏁 MCP job ${jobId} complete | action=${actionType} | outcome=${outcome}`
+        `\n🏁 MCP job ${jobId} complete | action=${actionType} | outcome=${outcome}`,
       );
       if (agentReasoning) {
         console.log(`   AI's reasoning: ${agentReasoning}`);

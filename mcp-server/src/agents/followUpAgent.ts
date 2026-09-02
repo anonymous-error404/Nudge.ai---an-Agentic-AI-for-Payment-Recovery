@@ -19,7 +19,7 @@ You must actually EXECUTE the tools. Do not just describe what you will do.`;
 export async function runFollowUpAgent(
   initialContext: FailureContext,
   availableTools: ToolSchema[],
-  onToolCall: (toolName: string, args: any) => Promise<any>
+  onToolCall: (toolName: string, args: any) => Promise<any>,
 ) {
   const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -53,7 +53,7 @@ Check the latest context first!`,
       for (const toolCall of msg.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments || "{}");
         console.log(`🤖 Agent calling tool: ${toolCall.function.name}`, args);
-        
+
         try {
           const result = await onToolCall(toolCall.function.name, args);
           messages.push({

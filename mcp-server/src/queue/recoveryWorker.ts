@@ -16,7 +16,7 @@ async function relayToolCallToMerchant(
   merchantCallbackUrl: string,
   toolName: string,
   args: any,
-  failureEventId?: string
+  failureEventId?: string,
 ): Promise<any> {
   const res = await fetch(`${merchantCallbackUrl}/tool-call`, {
     method: "POST",
@@ -93,9 +93,18 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
             type: "object",
             properties: {
               channel: { type: "string", enum: ["sms", "email", "whatsapp"] },
-              customer_name: { type: "string", description: "Customer's actual name" },
-              product_name: { type: "string", description: "Exact product name" },
-              amount: { type: "number", description: "Exact amount in INR (not paise)" },
+              customer_name: {
+                type: "string",
+                description: "Customer's actual name",
+              },
+              product_name: {
+                type: "string",
+                description: "Exact product name",
+              },
+              amount: {
+                type: "number",
+                description: "Exact amount in INR (not paise)",
+              },
             },
             required: ["channel"],
           },
@@ -125,14 +134,17 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
         console.log(
           `🤖 Delegating copy drafting to NotificationWriterAgent for channel: ${args.channel}`,
         );
-        
+
         // Use the args provided by the AI if available, otherwise fallback to stale job context
-        const orderDetails = args.product_name && args.amount ? {
-          product_name: args.product_name,
-          amount_rupees: args.amount,
-          currency: "INR",
-        } : context.order_details;
-        
+        const orderDetails =
+          args.product_name && args.amount
+            ? {
+                product_name: args.product_name,
+                amount_rupees: args.amount,
+                currency: "INR",
+              }
+            : context.order_details;
+
         const copy = await runNotificationWriterAgent({
           failureCategory: context.failure_category,
           channel: args.channel as any,
@@ -143,7 +155,13 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
         return { success: true, subject: copy.subject, body: copy.body };
       }
 
-      return relayToolCallToMerchant(jobId, merchantCallbackUrl, tool, args, failureEventId);
+      return relayToolCallToMerchant(
+        jobId,
+        merchantCallbackUrl,
+        tool,
+        args,
+        failureEventId,
+      );
     };
 
     if (isImmediateRecovery) {
@@ -165,14 +183,16 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
 
     if (isFollowUp && followUpScheduleId) {
       // ── Follow-Up Agent Loop ──────────────────────────────────────────────────
-      
+
       // Ensure a RecoveryAction row exists for this follow-up job so we can log it
-      await recoveryActionRepo.create({
-        merchantId,
-        failureEventId,
-        jobId,
-        attemptNumber: 1, // Follow-up is technically a subsequent attempt, but 1 is fine for the log
-      }).catch(e => console.warn("Action already exists:", e));
+      await recoveryActionRepo
+        .create({
+          merchantId,
+          failureEventId,
+          jobId,
+          attemptNumber: 1, // Follow-up is technically a subsequent attempt, but 1 is fine for the log
+        })
+        .catch((e) => console.warn("Action already exists:", e));
       await recoveryActionRepo.markInProgress(jobId).catch(() => {});
 
       let lastActionTaken = "do_nothing";
@@ -180,13 +200,20 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
 
       // Wrap the internal tool handler to track what action the AI took
       const followUpHandleInternalTool = async (tool: string, args: any) => {
-        if (tool !== "query_failure_context" && tool !== "draft_notification_copy") {
+        if (
+          tool !== "query_failure_context" &&
+          tool !== "draft_notification_copy"
+        ) {
           lastActionTaken = tool;
         }
         return handleInternalTool(tool, args);
       };
 
-      await runFollowUpAgent(context, internalTools as any, followUpHandleInternalTool);
+      await runFollowUpAgent(
+        context,
+        internalTools as any,
+        followUpHandleInternalTool,
+      );
 
       // Mark this schedule as completed
       await prisma.followUpSchedule.update({
@@ -194,11 +221,13 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
         data: { status: "COMPLETED" },
       });
 
-      await recoveryActionRepo.markComplete(jobId, {
-        actionType: lastActionTaken as ActionType,
-        outcome: RecoveryOutcome.Success,
-        agentReasoning: agentReasoningContext,
-      }).catch(e => console.warn("Failed to mark action complete:", e));
+      await recoveryActionRepo
+        .markComplete(jobId, {
+          actionType: lastActionTaken as ActionType,
+          outcome: RecoveryOutcome.Success,
+          agentReasoning: agentReasoningContext,
+        })
+        .catch((e) => console.warn("Failed to mark action complete:", e));
 
       console.log(`✅ Follow-up job ${jobId} complete.`);
       return;
@@ -212,10 +241,10 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
     if (isFollowUp && followUpScheduleId) {
       await prisma.followUpSchedule.update({
         where: { id: followUpScheduleId },
-        data: { 
-          status: "PENDING", 
-          nextExecutionAt: new Date(Date.now() + 5 * 60000)
-        }, 
+        data: {
+          status: "PENDING",
+          nextExecutionAt: new Date(Date.now() + 5 * 60000),
+        },
       });
       console.log(`Rescheduled failed follow-up job to run in 5 minutes.`);
     }
@@ -229,8 +258,12 @@ export function startRecoveryWorker() {
     {
       connection: redisConnection,
       concurrency: 3,
-    }
+    },
   );
-  worker.on("completed", (job) => console.log(`✅ BullMQ job ${job.id} completed`));
-  worker.on("failed", (job, err) => console.log(`❌ BullMQ job ${job?.id} failed: ${err}`));
+  worker.on("completed", (job) =>
+    console.log(`✅ BullMQ job ${job.id} completed`),
+  );
+  worker.on("failed", (job, err) =>
+    console.log(`❌ BullMQ job ${job?.id} failed: ${err}`),
+  );
 }

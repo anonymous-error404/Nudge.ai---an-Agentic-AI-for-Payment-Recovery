@@ -9,10 +9,17 @@ import { paymentRepository } from "../repositories/paymentRepository";
 import { failureEventRepository } from "../repositories/failureEventRepository";
 import { failureClassifierService } from "../services/failureClassifierService";
 import { handlePaymentFailure } from "../services/recoveryOrchestrator";
-import { failureSimulatorService } from "../services/failureSimulatorService";
+import { checkoutSimulatorService } from "../services/checkoutSimulatorService";
 import crypto from "crypto";
 
 class CheckoutController {
+  getFailureScenarios(req: Request, res: Response) {
+    res.json({
+      success: true,
+      data: checkoutSimulatorService.getScenarios(),
+    });
+  }
+
   async simulateCheckout(req: Request, res: Response) {
     const { productId, customerId, outcome, scenarioKey } = req.body as {
       productId?: string;
@@ -35,7 +42,7 @@ class CheckoutController {
     }
 
     try {
-      const result = await failureSimulatorService.simulateCheckout({
+      const result = await checkoutSimulatorService.simulateCheckout({
         productId,
         customerId,
         outcome: outcome as "success" | "fail",
@@ -55,7 +62,11 @@ class CheckoutController {
   }
 
   async checkout(req: Request, res: Response) {
-    const { productId, customerId, quantity: rawQty } = req.body as {
+    const {
+      productId,
+      customerId,
+      quantity: rawQty,
+    } = req.body as {
       productId?: string;
       customerId?: string;
       quantity?: number;
@@ -76,21 +87,33 @@ class CheckoutController {
       ]);
 
       if (!product)
-        return res.status(404).json({ success: false, error: "Product not found" });
+        return res
+          .status(404)
+          .json({ success: false, error: "Product not found" });
       if (!customer)
-        return res.status(404).json({ success: false, error: "Customer not found" });
+        return res
+          .status(404)
+          .json({ success: false, error: "Customer not found" });
       if (product.stock < quantity)
-        return res.status(400).json({ success: false, error: `Only ${product.stock} unit(s) left in stock` });
+        return res.status(400).json({
+          success: false,
+          error: `Only ${product.stock} unit(s) left in stock`,
+        });
 
       const totalAmount = product.price * quantity;
 
       // ── Idempotency: reuse an existing open order for same customer+product+quantity ──
-      let existingOrder = await orderRepository.findOpenOrderForCustomerProduct(customerId, productId);
+      let existingOrder = await orderRepository.findOpenOrderForCustomerProduct(
+        customerId,
+        productId,
+      );
       let order: any;
 
       if (existingOrder && existingOrder.quantity === quantity) {
         // Reuse — refresh amount to current price
-        console.log(`🔄 Reusing open order ${existingOrder.id} for customer=${customerId} product=${productId}`);
+        console.log(
+          `🔄 Reusing open order ${existingOrder.id} for customer=${customerId} product=${productId}`,
+        );
         order = await orderRepository.update(existingOrder.id, {
           amount: totalAmount,
           status: "attempted",
@@ -135,7 +158,9 @@ class CheckoutController {
       });
     } catch (err) {
       console.error("Error creating checkout:", err);
-      res.status(500).json({ success: false, error: "Failed to create checkout" });
+      res
+        .status(500)
+        .json({ success: false, error: "Failed to create checkout" });
     }
   }
 
@@ -144,11 +169,15 @@ class CheckoutController {
     try {
       const order = await orderRepository.findByRetryToken(token);
       if (!order)
-        return res.status(404).json({ success: false, error: "Order not found" });
+        return res
+          .status(404)
+          .json({ success: false, error: "Order not found" });
 
       // Only allow retry on non-paid orders
       if (order.status === "paid")
-        return res.status(400).json({ success: false, error: "Order is already paid" });
+        return res
+          .status(400)
+          .json({ success: false, error: "Order is already paid" });
 
       const product = order.product as any;
       const customer = order.customer as any;
@@ -161,7 +190,7 @@ class CheckoutController {
           status: order.status,
           quantity: order.quantity,
           originalAmount: order.amount, // paise at time of original order
-          currentPrice: product.price,  // latest unit price in paise
+          currentPrice: product.price, // latest unit price in paise
           currentTotal: product.price * order.quantity, // refreshed total
           stockAvailable: product.stock >= order.quantity,
           product: {
@@ -183,8 +212,6 @@ class CheckoutController {
       res.status(500).json({ success: false, error: "Failed to fetch order" });
     }
   }
-
-
 
   async getPaymentStatus(req: Request, res: Response) {
     const { razorpayPaymentId } = req.params;

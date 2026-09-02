@@ -4,7 +4,6 @@ import path from "path";
 import shopRouter from "./routes/shopRoutes";
 import checkoutRouter from "./routes/checkoutRoutes";
 import webhookRouter from "./routes/webhookRoutes";
-import devSimulatorRouter from "./routes/failureSimulatorRoutes";
 import mcpCallbackRouter from "./routes/mcpCallbackRoutes";
 import authRouter from "./routes/authRoutes";
 import session from "express-session";
@@ -46,7 +45,6 @@ app.use(authRouter);
 app.use(webhookRouter);        // /webhook/razorpay
 app.use(shopRouter);           // /api/products, /api/orders, /api/failure-events, /api/customers
 app.use(checkoutRouter);       // /api/checkout, /api/payment/*
-app.use(devSimulatorRouter);   // /api/dev/simulate-failure, /api/dev/failure-scenarios
 app.use(mcpCallbackRouter);    // /mcp/tool-call, /mcp/job-complete
 
 // ─── SPA fallback for HTML pages ─────────────────────────────────────────────

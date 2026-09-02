@@ -61,7 +61,10 @@ export async function executeQueryFailureContext(args: {
 
   const customer = event.payment?.order?.customer;
   const totalOrders = customer?.orders?.length ?? 0;
-  const successfulPayments = customer?.orders?.flatMap((o) => o.payments).filter((p) => p.status === "captured").length ?? 0;
+  const successfulPayments =
+    customer?.orders
+      ?.flatMap((o) => o.payments)
+      .filter((p) => p.status === "captured").length ?? 0;
 
   // Return non-PII enriched context
   return {
@@ -69,10 +72,11 @@ export async function executeQueryFailureContext(args: {
     classified_category: event.classifiedCategory,
     root_cause: event.rootCause,
     detected_at: event.detectedAt,
-    previous_recovery_attempts: (
-      event.payment?.order
-        ? await failureEventRepository.getRecoveryActionsByOrderId(event.payment.order.id)
-        : event.recoveryActions
+    previous_recovery_attempts: (event.payment?.order
+      ? await failureEventRepository.getRecoveryActionsByOrderId(
+          event.payment.order.id,
+        )
+      : event.recoveryActions
     ).map((a) => ({
       attempt: a.attemptNumber,
       action_type: a.actionType,
