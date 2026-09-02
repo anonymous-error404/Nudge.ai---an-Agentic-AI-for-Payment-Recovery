@@ -44,13 +44,11 @@ async function buildFailureContext(
   const event = await failureEventRepository.getById(failureEventId);
   if (!event) throw new Error(`Failure event not found: ${failureEventId}`);
 
-  const previousActions =
-    await failureEventRepository.getRecoveryActionsByFailureEventId(
-      failureEventId,
-    );
-
-  // Redacted order context — amount bucket only, no customer name/email/phone
   const order = event.payment?.order;
+  
+  const previousActions = order
+    ? await failureEventRepository.getRecoveryActionsByOrderId(order.id)
+    : [];
   const amountBucket = order ? toAmountBucket(order.amount) : "unknown";
 
   const daysSinceFailure = Math.floor(
@@ -60,6 +58,8 @@ async function buildFailureContext(
   return {
     failure_event_id: failureEventId,
     customer_id: order?.customerId ?? "unknown",
+    customer_name: order?.customer?.name ?? "Customer",
+    order_status: order?.status ?? "unknown",
     failure_category: category,
     amount_bucket: amountBucket,
     attempt_count: previousActions.length,
@@ -92,7 +92,7 @@ class MCPClient {
     failureEventId: string,
     category: FailureCategory,
     paymentId: string,
-  ): Promise<{ jobId: string }> {
+  ): Promise<{ uiMessage?: string; smsMessage?: string; followUpScheduleId?: string }> {
     const context = await buildFailureContext(
       failureEventId,
       category,
@@ -102,30 +102,29 @@ class MCPClient {
     const body = {
       merchantId: MERCHANT_ID,
       merchantCallbackUrl: MERCHANT_CALLBACK_URL,
-      externalRef: failureEventId, // idempotency key on the server
+      externalRef: failureEventId,
       context,
-      toolSchemas: TOOL_SCHEMAS, // tell the server what tools we have
+      toolSchemas: TOOL_SCHEMAS,
     };
 
-    const res = await fetch(`${MCP_SERVER_URL}/api/recovery-jobs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    try {
+      console.log(`📡 Sending failure context to MCP Server: event=${failureEventId}`);
+      const response = await fetch(`${MCP_SERVER_URL}/api/recovery-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`MCP server rejected job: ${res.status} ${err}`);
+      if (!response.ok) {
+        throw new Error(`MCP Server error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data as any;
+    } catch (error) {
+      console.error("❌ Failed to submit recovery job to MCP:", error);
+      return {};
     }
-
-    const json = (await res.json()) as {
-      success: boolean;
-      jobId: string;
-      isNew: boolean;
-      message: string;
-    };
-    console.log(`📤 MCP job submitted: ${json.jobId} (isNew=${json.isNew})`);
-    return { jobId: json.jobId };
   }
 
   /**

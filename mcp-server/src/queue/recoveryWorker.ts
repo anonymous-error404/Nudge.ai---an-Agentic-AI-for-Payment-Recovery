@@ -1,189 +1,236 @@
 import { Worker, Job } from "bullmq";
-import {
-  redisConnection,
-  QUEUE_NAME,
-  waitForToolResult,
-  toolResultKey,
-} from "./recoveryQueue";
+import { recoveryQueue, redisConnection } from "./recoveryQueue";
+import { RecoveryJobPayload } from "../types";
 import { recoveryActionRepo } from "../repositories/recoveryActionRepo";
-import { runDecisionAgent } from "../agents/decisionAgent";
+import { ActionType, RecoveryOutcome } from "../enums";
+import { runFollowUpAgent } from "../agents/followUpAgent";
+import { runImmediateActionAgent } from "../agents/immediateActionAgent";
 import { runNotificationWriterAgent } from "../agents/notificationWriterAgent";
-import { RecoveryOutcome, ActionType, NotificationChannel } from "../enums";
-import type {
-  RecoveryJobPayload,
-  ToolCallMessage,
-  JobCompleteMessage,
-} from "../types";
+import { prisma } from "../lib/prismaClient";
 
-const MERCHANT_CALLBACK_TIMEOUT = 30_000; // 30s for merchant to execute a tool
-
+/**
+ * ─── TOOL RELAY ──────────────────────────────────────────────────────────────
+ */
 async function relayToolCallToMerchant(
   jobId: string,
   merchantCallbackUrl: string,
-  tool: string,
-  args: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const body: ToolCallMessage = { jobId, tool, args };
-
-  console.log(
-    `📡 Relaying tool call [${tool}] to merchant callback: ${merchantCallbackUrl}/tool-call`,
-  );
-
+  toolName: string,
+  args: any,
+  failureEventId?: string
+): Promise<any> {
   const res = await fetch(`${merchantCallbackUrl}/tool-call`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000), // 10s for merchant to ACK the relay
+    body: JSON.stringify({ jobId, tool: toolName, args, failureEventId }),
   });
 
   if (!res.ok) {
-    throw new Error(
-      `Merchant callback rejected tool call: ${res.status} ${await res.text()}`,
-    );
+    throw new Error(`Merchant tool error: ${res.status} ${await res.text()}`);
   }
-
-  // Now wait for merchant to POST the result back to /api/tool-results
-  return waitForToolResult(jobId, MERCHANT_CALLBACK_TIMEOUT);
+  return res.json();
 }
 
-async function notifyJobComplete(
-  merchantCallbackUrl: string,
-  payload: JobCompleteMessage,
-): Promise<void> {
-  await fetch(`${merchantCallbackUrl}/job-complete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10_000),
-  }).catch((e) =>
-    console.warn("Failed to notify merchant of job complete:", e),
-  );
-}
-
+/**
+ * ─── WORKER PROCESSING ────────────────────────────────────────────────────────
+ */
 async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
-  const {
+  let {
     merchantId,
     merchantCallbackUrl,
     failureEventId,
     context,
     toolSchemas,
+    isFollowUp,
+    followUpScheduleId,
+    isImmediateRecovery,
   } = job.data;
   const jobId = job.id!;
 
+  toolSchemas = toolSchemas || [];
+
+  if (toolSchemas.length === 0) {
+    try {
+      console.log(`fetching tools from ${merchantCallbackUrl}/tools`);
+      const res = await fetch(`${merchantCallbackUrl}/tools`);
+      if (res.ok) {
+        const json = (await res.json()) as any;
+        toolSchemas = json.schemas || [];
+      }
+    } catch (e) {
+      console.error("Failed to fetch tool schemas from merchant:", e);
+    }
+  }
+
   console.log(
-    `\n⚙️  Processing recovery job: ${jobId} | merchant=${merchantId} | category=${context.failure_category}`,
+    `\n⚙️  Processing recovery job: ${jobId} | isFollowUp=${!!isFollowUp} | isImmediate=${!!isImmediateRecovery} | category=${context.failure_category}`,
   );
 
-  // Mark in-progress
-  await recoveryActionRepo.markInProgress(jobId);
-
   try {
-    // ── Agent 1: Recovery Decision Agent ──────────────────────────────────────
-    const { actionType, agentReasoning, toolCallArgs } = await runDecisionAgent(
-      context,
-      toolSchemas,
-      async (tool, args) => {
-        // This callback is called each time AI picks a tool
-        return relayToolCallToMerchant(jobId, merchantCallbackUrl, tool, args);
-      },
-    );
-
-    // ── Agent 3: Notification Writer (if action = send_notification) ──────────
-    let notificationContent: string | undefined;
-
-    if (actionType === ActionType.SendNotification) {
-      const channel =
-        (toolCallArgs.channel as NotificationChannel) ??
-        NotificationChannel.Email;
-      console.log(
-        `✍️  Invoking Agent 3 (Notification Writer) for channel: ${channel}`,
-      );
-
-      const written = await runNotificationWriterAgent({
-        failureCategory: context.failure_category,
-        channel,
-        amountBucket: context.amount_bucket,
-        orderDetails: context.order_details ?? null,
-      });
-
-      notificationContent = written.subject
-        ? `Subject: ${written.subject}\n\n${written.body}`
-        : written.body;
-
-      console.log(`📝 Agent 3 wrote:\n${notificationContent}`);
-
-      // Relay the written content back to merchant so they can actually send it
-      await relayToolCallToMerchant(
-        jobId,
-        merchantCallbackUrl,
-        "deliver_notification",
-        {
-          ...toolCallArgs,
-          content: notificationContent,
-          subject: written.subject,
+    const internalTools = [
+      ...toolSchemas,
+      {
+        type: "function",
+        function: {
+          name: "schedule_next_follow_up",
+          description:
+            "Schedules the next follow-up in X minutes. Use this if the customer hasn't paid yet and you want to try again later.",
+          parameters: {
+            type: "object",
+            properties: {
+              delay_minutes: { type: "number" },
+            },
+            required: ["delay_minutes"],
+          },
         },
-      ).catch((e) => console.warn("deliver_notification relay failed:", e));
-    }
+      },
+      {
+        type: "function",
+        function: {
+          name: "draft_notification_copy",
+          description:
+            "Calls the expert Notification Writer subagent to draft highly persuasive copy. You MUST pass the customer_name, product_name, and amount if you learned them from query_failure_context.",
+          parameters: {
+            type: "object",
+            properties: {
+              channel: { type: "string", enum: ["sms", "email", "whatsapp"] },
+              customer_name: { type: "string", description: "Customer's actual name" },
+              product_name: { type: "string", description: "Exact product name" },
+              amount: { type: "number", description: "Exact amount in INR (not paise)" },
+            },
+            required: ["channel"],
+          },
+        },
+      },
+    ];
 
-    // ── Log outcome ───────────────────────────────────────────────────────────
-    await recoveryActionRepo.markComplete(jobId, {
-      actionType,
-      outcome: RecoveryOutcome.Success,
-      agentReasoning,
-      notificationContent,
-    });
+    const handleInternalTool = async (tool: string, args: any) => {
+      if (tool === "schedule_next_follow_up") {
+        const nextExecutionAt = new Date(
+          Date.now() + args.delay_minutes * 60000,
+        );
+        await prisma.followUpSchedule.create({
+          data: {
+            merchantId,
+            failureEventId,
+            nextExecutionAt,
+          },
+        });
+        return {
+          success: true,
+          message: `Scheduled next follow-up at ${nextExecutionAt.toISOString()}`,
+        };
+      }
 
-    const completeMsg: JobCompleteMessage = {
-      jobId,
-      actionType,
-      outcome: RecoveryOutcome.Success,
-      agentReasoning,
-      notificationContent,
+      if (tool === "draft_notification_copy") {
+        console.log(
+          `🤖 Delegating copy drafting to NotificationWriterAgent for channel: ${args.channel}`,
+        );
+        
+        // Use the args provided by the AI if available, otherwise fallback to stale job context
+        const orderDetails = args.product_name && args.amount ? {
+          product_name: args.product_name,
+          amount_rupees: args.amount,
+          currency: "INR",
+        } : context.order_details;
+        
+        const copy = await runNotificationWriterAgent({
+          failureCategory: context.failure_category,
+          channel: args.channel as any,
+          amountBucket: context.amount_bucket,
+          customerName: args.customer_name || context.customer_name,
+          orderDetails: orderDetails,
+        });
+        return { success: true, subject: copy.subject, body: copy.body };
+      }
+
+      return relayToolCallToMerchant(jobId, merchantCallbackUrl, tool, args, failureEventId);
     };
 
-    await notifyJobComplete(merchantCallbackUrl, completeMsg);
+    if (isImmediateRecovery) {
+      // ── Immediate Agent Loop ──────────────────────────────────────────────────
+      await runImmediateActionAgent(
+        context,
+        internalTools as any,
+        handleInternalTool,
+      );
+
+      await recoveryActionRepo.markComplete(jobId, {
+        actionType: ActionType.SendNotification,
+        outcome: RecoveryOutcome.Success,
+        agentReasoning: "Immediate recovery tools executed",
+      });
+      console.log(`✅ Immediate recovery job ${jobId} complete.`);
+      return;
+    }
+
+    if (isFollowUp && followUpScheduleId) {
+      // ── Follow-Up Agent Loop ──────────────────────────────────────────────────
+      
+      // Ensure a RecoveryAction row exists for this follow-up job so we can log it
+      await recoveryActionRepo.create({
+        merchantId,
+        failureEventId,
+        jobId,
+        attemptNumber: 1, // Follow-up is technically a subsequent attempt, but 1 is fine for the log
+      }).catch(e => console.warn("Action already exists:", e));
+      await recoveryActionRepo.markInProgress(jobId).catch(() => {});
+
+      let lastActionTaken = "do_nothing";
+      let agentReasoningContext = "Executed follow-up sequence";
+
+      // Wrap the internal tool handler to track what action the AI took
+      const followUpHandleInternalTool = async (tool: string, args: any) => {
+        if (tool !== "query_failure_context" && tool !== "draft_notification_copy") {
+          lastActionTaken = tool;
+        }
+        return handleInternalTool(tool, args);
+      };
+
+      await runFollowUpAgent(context, internalTools as any, followUpHandleInternalTool);
+
+      // Mark this schedule as completed
+      await prisma.followUpSchedule.update({
+        where: { id: followUpScheduleId },
+        data: { status: "COMPLETED" },
+      });
+
+      await recoveryActionRepo.markComplete(jobId, {
+        actionType: lastActionTaken as ActionType,
+        outcome: RecoveryOutcome.Success,
+        agentReasoning: agentReasoningContext,
+      }).catch(e => console.warn("Failed to mark action complete:", e));
+
+      console.log(`✅ Follow-up job ${jobId} complete.`);
+      return;
+    }
 
     console.log(
-      `✅ Job ${jobId} complete | action=${actionType} | outcome=success`,
+      `Job ${jobId} is not a follow-up or immediate. Unknown format.`,
     );
   } catch (err) {
     console.error(`❌ Job ${jobId} failed:`, err);
-
-    await recoveryActionRepo.markComplete(jobId, {
-      actionType: null,
-      outcome: RecoveryOutcome.Failed,
-      agentReasoning: `Worker error: ${String(err)}`,
-    });
-
-    await notifyJobComplete(merchantCallbackUrl, {
-      jobId,
-      actionType: null,
-      outcome: RecoveryOutcome.Failed,
-      agentReasoning: `Worker error: ${String(err)}`,
-    });
-
-    throw err; // let BullMQ handle retry
+    if (isFollowUp && followUpScheduleId) {
+      await prisma.followUpSchedule.update({
+        where: { id: followUpScheduleId },
+        data: { 
+          status: "PENDING", 
+          nextExecutionAt: new Date(Date.now() + 5 * 60000)
+        }, 
+      });
+      console.log(`Rescheduled failed follow-up job to run in 5 minutes.`);
+    }
   }
 }
 
 export function startRecoveryWorker() {
   const worker = new Worker<RecoveryJobPayload>(
-    QUEUE_NAME,
+    "recovery-jobs",
     processRecoveryJob,
     {
       connection: redisConnection,
-      concurrency: 3, // max 3 AI calls at a time
-    },
+      concurrency: 3,
+    }
   );
-
-  worker.on("completed", (job) => {
-    console.log(`✅ BullMQ job ${job.id} completed`);
-  });
-
-  worker.on("failed", (job, err) => {
-    console.error(`❌ BullMQ job ${job?.id} failed:`, err.message);
-  });
-
-  console.log("🔄 Recovery Worker started (concurrency=3)");
-  return worker;
+  worker.on("completed", (job) => console.log(`✅ BullMQ job ${job.id} completed`));
+  worker.on("failed", (job, err) => console.log(`❌ BullMQ job ${job?.id} failed: ${err}`));
 }

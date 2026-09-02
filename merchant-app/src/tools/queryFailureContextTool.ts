@@ -4,6 +4,7 @@
  * AI may call this before deciding which recovery action to take.
  */
 import { prisma } from "../lib/prismaClient";
+import { failureEventRepository } from "../repositories/failureEventRepository";
 
 export const queryFailureContextSchema = {
   type: "function" as const,
@@ -68,20 +69,27 @@ export async function executeQueryFailureContext(args: {
     classified_category: event.classifiedCategory,
     root_cause: event.rootCause,
     detected_at: event.detectedAt,
-    previous_recovery_attempts: event.recoveryActions.map((a) => ({
+    previous_recovery_attempts: (
+      event.payment?.order
+        ? await failureEventRepository.getRecoveryActionsByOrderId(event.payment.order.id)
+        : event.recoveryActions
+    ).map((a) => ({
       attempt: a.attemptNumber,
       action_type: a.actionType,
       outcome: a.outcome,
       reasoning: a.agentReasoning,
     })),
     payment_method: event.payment?.method ?? "unknown",
+    order_status: event.payment?.order?.status ?? "unknown",
     order_amount_paise: event.payment?.order?.amount,
     product_name: event.payment?.order?.product?.name ?? "unknown",
     customer_insights: {
       total_orders: totalOrders,
       successful_payments: successfulPayments,
       is_returning_customer: totalOrders > 1,
-      // No name, phone, or email crosses this boundary
+      // No email/phone crosses this boundary, but we provide ID and Name for notification tools
     },
+    customer_id: customer?.id ?? "unknown",
+    customer_name: customer?.name ?? "Customer",
   };
 }

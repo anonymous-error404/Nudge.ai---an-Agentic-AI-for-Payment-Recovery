@@ -55,10 +55,12 @@ class CheckoutController {
   }
 
   async checkout(req: Request, res: Response) {
-    const { productId, customerId } = req.body as {
+    const { productId, customerId, quantity: rawQty } = req.body as {
       productId?: string;
       customerId?: string;
+      quantity?: number;
     };
+    const quantity = Math.max(1, Number(rawQty) || 1);
 
     if (!productId || !customerId) {
       return res.status(400).json({
@@ -74,41 +76,53 @@ class CheckoutController {
       ]);
 
       if (!product)
-        return res
-          .status(404)
-          .json({ success: false, error: "Product not found" });
+        return res.status(404).json({ success: false, error: "Product not found" });
       if (!customer)
-        return res
-          .status(404)
-          .json({ success: false, error: "Customer not found" });
-      if (product.stock <= 0)
-        return res
-          .status(400)
-          .json({ success: false, error: "Product out of stock" });
+        return res.status(404).json({ success: false, error: "Customer not found" });
+      if (product.stock < quantity)
+        return res.status(400).json({ success: false, error: `Only ${product.stock} unit(s) left in stock` });
 
-      const order = await orderRepository.create({
-        customerId: customer.id,
-        productId: product.id,
-        amount: product.price,
-        status: "created",
-      });
+      const totalAmount = product.price * quantity;
+
+      // ── Idempotency: reuse an existing open order for same customer+product+quantity ──
+      let existingOrder = await orderRepository.findOpenOrderForCustomerProduct(customerId, productId);
+      let order: any;
+
+      if (existingOrder && existingOrder.quantity === quantity) {
+        // Reuse — refresh amount to current price
+        console.log(`🔄 Reusing open order ${existingOrder.id} for customer=${customerId} product=${productId}`);
+        order = await orderRepository.update(existingOrder.id, {
+          amount: totalAmount,
+          status: "attempted",
+        });
+      } else {
+        // Create fresh (quantity changed or no open order)
+        order = await orderRepository.create({
+          customerId: customer.id,
+          productId: product.id,
+          quantity,
+          amount: totalAmount,
+          status: "created",
+        });
+      }
 
       const razorpayOrder = await createRazorpayOrder({
-        amount: product.price,
+        amount: totalAmount,
         currency: "INR",
-        receipt: order.id,
+        receipt: order!.id,
         notes: { product_name: product.name, customer_email: customer.email },
       });
 
       await prisma.order.update({
-        where: { id: order.id },
+        where: { id: order!.id },
         data: { razorpayOrderId: razorpayOrder.id },
       });
 
       res.json({
         success: true,
         data: {
-          orderId: order.id,
+          orderId: order!.id,
+          retryToken: (order as any).retryToken,
           razorpayOrderId: razorpayOrder.id,
           amount: razorpayOrder.amount,
           currency: razorpayOrder.currency,
@@ -121,11 +135,56 @@ class CheckoutController {
       });
     } catch (err) {
       console.error("Error creating checkout:", err);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to create checkout" });
+      res.status(500).json({ success: false, error: "Failed to create checkout" });
     }
   }
+
+  async getOrderByRetryToken(req: Request, res: Response) {
+    const { token } = req.params;
+    try {
+      const order = await orderRepository.findByRetryToken(token);
+      if (!order)
+        return res.status(404).json({ success: false, error: "Order not found" });
+
+      // Only allow retry on non-paid orders
+      if (order.status === "paid")
+        return res.status(400).json({ success: false, error: "Order is already paid" });
+
+      const product = order.product as any;
+      const customer = order.customer as any;
+
+      res.json({
+        success: true,
+        data: {
+          orderId: order.id,
+          retryToken: order.retryToken,
+          status: order.status,
+          quantity: order.quantity,
+          originalAmount: order.amount, // paise at time of original order
+          currentPrice: product.price,  // latest unit price in paise
+          currentTotal: product.price * order.quantity, // refreshed total
+          stockAvailable: product.stock >= order.quantity,
+          product: {
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            imageUrl: product.imageUrl,
+            stock: product.stock,
+          },
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+          },
+        },
+      });
+    } catch (err) {
+      console.error("Error fetching order by retry token:", err);
+      res.status(500).json({ success: false, error: "Failed to fetch order" });
+    }
+  }
+
+
 
   async getPaymentStatus(req: Request, res: Response) {
     const { razorpayPaymentId } = req.params;
@@ -254,6 +313,7 @@ class CheckoutController {
 
       const { event: failureEvent, isNew } =
         await failureEventRepository.createIdempotent({
+          orderId: order.id,
           paymentId: payment.id,
           category,
           rootCause,
@@ -268,9 +328,7 @@ class CheckoutController {
         );
       } else {
         decision = {
-          recoveryType: "delayed",
-          action: "send_notification",
-          message: "Payment failed. We'll follow up shortly.",
+          uiMessage: "Payment failed. Please try again.",
         };
       }
 

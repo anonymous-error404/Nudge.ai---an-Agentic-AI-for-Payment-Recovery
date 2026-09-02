@@ -11,11 +11,9 @@
 
 <nav>
   <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
-  <div class="nav-links">
-    <a href="/">Store</a>
-    <a href="/admin">Admin Panel</a>
-  </div>
+  <div class="nav-links"></div>
 </nav>
+<script src="/auth.js"></script>
 
 <div class="container">
   <div class="page-header">
@@ -58,13 +56,7 @@
     <div class="product-right">
       <div class="checkout-card">
 
-        <!-- Customer Select -->
-        <div class="form-group">
-          <label for="customer-select"><i data-lucide="user"></i> Shopping as</label>
-          <select id="customer-select">
-            <option value="">Loading customers…</option>
-          </select>
-        </div>
+          <div id="auth-header" style="margin-bottom: 1.5rem; text-align: center;"></div>
 
         <!-- ═══════ SIMULATE MODE UI ═══════ -->
         <div id="simulate-ui">
@@ -107,6 +99,14 @@
           <button id="buy-btn" class="btn btn-primary btn-block btn-lg" disabled>
             <i data-lucide="credit-card"></i> Pay with Razorpay
           </button>
+        </div>
+        
+        <div id="ai-recovery-message" style="display:none; margin-top:1rem; padding:1.2rem; background: linear-gradient(135deg, rgba(67, 97, 238, 0.15), rgba(76, 201, 240, 0.05)); border: 1px solid var(--accent-glow); border-radius:12px; color: #fff; font-size:0.95rem; line-height:1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+          <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; font-weight:700; color: #80ffea;">
+            <i data-lucide="sparkles" style="width:1.2rem; height:1.2rem;"></i>
+            <span style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px;">AI Assistant</span>
+          </div>
+          <div id="ai-recovery-text" style="color: #e6ecff; font-weight: 500;"></div>
         </div>
 
         <div style="margin-top:1rem; font-size:0.78rem; color: var(--text-muted); text-align:center;">
@@ -157,11 +157,25 @@
     img.src = product.imageUrl;
     img.alt = product.name;
 
-    // Populate customer dropdown
-    const customerSelect = document.getElementById('customer-select');
-    customerSelect.innerHTML = customers.map(c =>
-      `<option value="${c.id}">${c.name} — ${c.email}</option>`
-    ).join('');
+    // Fetch current user session
+    let currentUser = null;
+    const authRes = await fetch('/api/auth/me');
+    const authData = await authRes.json();
+    if (authData.success && authData.user) {
+      currentUser = authData.user;
+      // We no longer show the redundant "Logged in as" header inside the card
+      document.getElementById('auth-header').style.display = 'none';
+    } else {
+      document.getElementById('auth-header').innerHTML = `
+        <div style="font-size:0.9rem; color:var(--text-muted); background: rgba(239, 68, 68, 0.1); padding: 0.5rem 1rem; border-radius: 4px;">
+          <i data-lucide="alert-circle" style="color:var(--danger);"></i> <strong>Not logged in!</strong> 
+          <a href="/login" style="color:var(--accent); margin-left:1rem; font-weight:600;">Login to buy</a>
+        </div>
+      `;
+    }
+
+    // Assign customer ID globally so checkout uses it
+    window.currentCustomerId = currentUser ? currentUser.id : null;
 
     // Populate scenario dropdown
     const scenarioSelect = document.getElementById('scenario-select');
@@ -229,18 +243,16 @@
   }
 
   function validateSimulateForm() {
-    const customerId = document.getElementById('customer-select').value;
+    const customerId = window.currentCustomerId;
     const scenarioKey = document.getElementById('scenario-select').value;
     const btn = document.getElementById('simulate-btn');
     const disabled = !customerId || (selectedOutcome === 'fail' && !scenarioKey);
     btn.disabled = disabled;
   }
 
-  document.getElementById('customer-select').addEventListener('change', validateSimulateForm);
-
   // ─── Run Simulated Checkout ────────────────────────────────────────────────
   document.getElementById('simulate-btn').addEventListener('click', async () => {
-    const customerId = document.getElementById('customer-select').value;
+    const customerId = window.currentCustomerId;
     const outcome = selectedOutcome;
     const scenarioKey = document.getElementById('scenario-select').value;
 
@@ -250,6 +262,9 @@
     const btn = document.getElementById('simulate-btn');
     const originalText = btn.innerHTML;
     btn.disabled = true;
+    
+    // Hide previous AI message if any
+    document.getElementById('ai-recovery-message').style.display = 'none';
     
     // Add spinner and processing text
     btn.innerHTML = `<i data-lucide="loader-2" style="animation: spin 1s linear infinite;"></i> Processing…`;
@@ -278,7 +293,9 @@
     } finally {
       // Re-enable button ONLY if it's not success (success navigates away)
       if (outcome !== 'success') {
-        btn.innerHTML = originalText;
+        btn.innerHTML = outcome === 'fail' 
+          ? `<i data-lucide="refresh-cw"></i> Retry Payment` 
+          : originalText;
         btn.disabled = false;
         lucide.createIcons();
       }
@@ -288,19 +305,31 @@
   function showFailureResult(data) {
     const d = data;
     const categoryLabel = d.scenario?.label || d.category || 'Payment Failed';
-    const msg = d.recoveryDecision?.message || `Failed due to ${categoryLabel}`;
-    
+    const msg = d.recoveryDecision?.uiMessage || d.recoveryDecision?.message;
+
     const toastContent = `
       <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem; color:#f87171;">
         <i data-lucide="x-circle" style="width:1.25rem; height:1.25rem;"></i> 
         <strong style="font-size:0.95rem;">Payment Failed</strong>
       </div>
       <div style="font-weight:400; line-height:1.4;">
-        ${msg}
+        Failed due to ${categoryLabel}
+      </div>
+      <div style="margin-top:0.5rem; font-size:0.85rem; opacity:0.9;">
+        Please try again by clicking Retry Payment.
       </div>
     `;
     
-    showToastHTML(toastContent, 'error', 6000);
+    showToastHTML(toastContent, 'error', 6000); 
+
+    // If AI gave us a specific uiMessage, show it in the special div below the button
+    if (msg) {
+      const msgBox = document.getElementById('ai-recovery-message');
+      const msgText = document.getElementById('ai-recovery-text');
+      msgText.textContent = msg;
+      msgBox.style.display = 'block';
+      lucide.createIcons({ root: msgBox });
+    }
   }
 
   function showToastHTML(htmlContent, type, duration = 4000) {
@@ -316,7 +345,7 @@
 
   // ─── Real Razorpay Checkout (existing logic, kept) ─────────────────────────
   document.getElementById('buy-btn').addEventListener('click', async () => {
-    const customerId = document.getElementById('customer-select').value;
+    const customerId = window.currentCustomerId;
     if (!customerId || !productData) return;
 
     const btn = document.getElementById('buy-btn');

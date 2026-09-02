@@ -152,7 +152,7 @@ i[data-lucide] {
 .container { 
   max-width: 1280px; 
   margin: 0 auto; 
-  padding: 1.5rem 2.5rem; /* Reduced top/bottom padding to fit one screen */
+  padding: 0.5rem 2.5rem; /* Reduced top/bottom padding to fit one screen */
 }
 
 /* ─── Page Header ─── */
@@ -345,9 +345,9 @@ i[data-lucide] {
   overflow: hidden;
   background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
   border: 1px solid var(--border);
-  height: 40vh; /* Restrict height so it doesn't push info down too much */
-  min-height: 250px;
-  max-height: 360px;
+  height: 28vh; /* Reduced height to keep checkout card visible */
+  min-height: 200px;
+  max-height: 260px;
 }
 .product-image-badge {
   position: absolute;
@@ -1088,3 +1088,4 @@ select:focus {
   .processing-card { padding: 1.75rem 1.25rem; }
   .toast { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
 }
+

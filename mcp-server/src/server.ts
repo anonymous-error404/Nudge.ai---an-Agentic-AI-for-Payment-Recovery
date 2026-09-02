@@ -4,6 +4,7 @@ import cors from "cors";
 import recoveryJobsRouter from "./routes/recoveryJobsRoutes";
 import toolResultsRouter from "./routes/toolResultsRoutes";
 import { startRecoveryWorker } from "./queue/recoveryWorker";
+import { startFollowUpPoller } from "./cron/followUpPoller";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -19,7 +20,11 @@ app.use(toolResultsRouter);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "mcp-server", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    service: "mcp-server",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ─── Global error handler ─────────────────────────────────────────────────────
@@ -36,7 +41,8 @@ app.listen(PORT, () => {
   console.log(`   Audit log:    http://localhost:${PORT}/api/audit\n`);
 });
 
-// ─── Start BullMQ Worker ──────────────────────────────────────────────────────
+// ─── Start BullMQ Worker & Poller ──────────────────────────────────────────────
 startRecoveryWorker();
+startFollowUpPoller();
 
 export default app;

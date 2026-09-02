@@ -116,16 +116,38 @@ class FailureSimulatorService {
 
     if (!product) throw new Error("Product not found");
     if (!customer) throw new Error("Customer not found");
-    if (product.stock <= 0) throw new Error("Product out of stock");
 
-    const fakeRazorpayOrderId = `order_ck_${outcome}_${Date.now()}`;
-    const order = await orderRepository.create({
-      customerId: customer.id,
-      productId: product.id,
-      amount: product.price,
-      status: "created",
-      razorpayOrderId: fakeRazorpayOrderId,
-    });
+    const quantity = 1; // checkout page currently orders 1 unit; extend later if needed
+    if (product.stock < quantity) throw new Error("Product out of stock");
+
+    const totalAmount = product.price * quantity;
+
+    // ── Idempotency: reuse an existing open order for same customer+product ──
+    let existingOrder = await orderRepository.findOpenOrderForCustomerProduct(customer.id, product.id);
+
+    let order: any;
+    let fakeRazorpayOrderId: string;
+
+    if (existingOrder && existingOrder.quantity === quantity) {
+      // Reuse — refresh amount to current price
+      console.log(`🔄 [Simulated Checkout] Reusing open order ${existingOrder.id}`);
+      fakeRazorpayOrderId = `order_ck_${outcome}_${Date.now()}`;
+      order = await orderRepository.update(existingOrder.id, {
+        amount: totalAmount,
+        status: "attempted",
+        razorpayOrderId: fakeRazorpayOrderId,
+      });
+    } else {
+      fakeRazorpayOrderId = `order_ck_${outcome}_${Date.now()}`;
+      order = await orderRepository.create({
+        customerId: customer.id,
+        productId: product.id,
+        quantity,
+        amount: totalAmount,
+        status: "created",
+        razorpayOrderId: fakeRazorpayOrderId,
+      });
+    }
 
     // ─── SUCCESS PATH ────────────────────────────────────────────────────────
     if (outcome === "success") {
@@ -154,7 +176,7 @@ class FailureSimulatorService {
         order: {
           id: order.id,
           razorpayOrderId: fakeRazorpayOrderId,
-          amount: product.price,
+          amount: totalAmount,
         },
         payment: { id: fakeRazorpayPaymentId },
       };
@@ -200,6 +222,7 @@ class FailureSimulatorService {
     // 4. Create failure event (idempotent)
     const { event: failureEvent, isNew } =
       await failureEventRepository.createIdempotent({
+        orderId: order.id,
         paymentId: payment.id,
         category,
         rootCause,
@@ -229,7 +252,7 @@ class FailureSimulatorService {
             entity: {
               id: fakeRazorpayPaymentId,
               entity: "payment",
-              amount: product.price,
+              amount: totalAmount,
               currency: "INR",
               status: "failed",
               order_id: fakeRazorpayOrderId,
@@ -268,7 +291,7 @@ class FailureSimulatorService {
       : null;
 
     console.log(
-      `🧪 [Simulated Checkout] FAIL | scenario=${scenarioKey} | order=${order.id} | payment=${fakeRazorpayPaymentId} | category=${category} | recovery=${recoveryDecision?.action ?? "—"}`,
+      `🧪 [Simulated Checkout] FAIL | scenario=${scenarioKey} | order=${order.id} | payment=${fakeRazorpayPaymentId} | category=${category} | recovery=${recoveryDecision ? "ai_handled" : "—"}`,
     );
 
     return {
@@ -284,7 +307,8 @@ class FailureSimulatorService {
       order: {
         id: order.id,
         razorpayOrderId: fakeRazorpayOrderId,
-        amount: product.price,
+        retryToken: order.retryToken,
+        amount: totalAmount,
       },
       payment: { id: fakeRazorpayPaymentId, method: scenario.method },
       recoveryDecision,
@@ -410,6 +434,7 @@ class FailureSimulatorService {
 
     const { event: failureEvent, isNew } =
       await failureEventRepository.createIdempotent({
+        orderId: order.id,
         paymentId: payment.id,
         category,
         rootCause,
@@ -417,7 +442,7 @@ class FailureSimulatorService {
 
     let recoveryDecision = null;
     if (isNew && failureEvent) {
-      recoveryDecision = await handlePaymentFailure(
+        recoveryDecision = await handlePaymentFailure(
         failureEvent.id,
         category,
         payment.id,
@@ -429,7 +454,7 @@ class FailureSimulatorService {
     );
 
     console.log(
-      `🧪 Simulated ${failureType} | order=${order.id} | payment=${fakePaymentId} | category=${category} | recovery=${recoveryDecision?.action}`,
+      `🧪 Simulated ${failureType} | order=${order.id} | payment=${fakePaymentId} | category=${category} | recovery=${recoveryDecision ? "ai_handled" : "none"}`,
     );
 
     return {

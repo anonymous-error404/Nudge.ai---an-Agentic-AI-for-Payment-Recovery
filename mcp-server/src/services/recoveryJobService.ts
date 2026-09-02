@@ -2,8 +2,10 @@ import { recoveryQueue } from "../queue/recoveryQueue";
 import { failureEventRepo } from "../repositories/failureEventRepo";
 import { recoveryActionRepo } from "../repositories/recoveryActionRepo";
 import { prisma } from "../lib/prismaClient";
+import { ActionType, RecoveryOutcome } from "../enums";
 import type { RecoveryJobInput } from "./validationSchemas";
-import type { RecoveryJobPayload } from "../types";
+import type { RecoveryJobPayload, FailureContext } from "../types";
+import { runCheckoutUIAgent } from "../agents/checkoutUIAgent";
 
 class RecoveryJobService {
   /**
@@ -21,39 +23,40 @@ class RecoveryJobService {
     });
 
     if (!isNew) {
-      // Already logged — find the existing job
-      const existingAction = await prisma.recoveryAction.findFirst({
-        where: { failureEventId: event.id },
-        orderBy: { createdAt: "desc" },
-      });
       return {
         isNew: false,
-        jobId: existingAction?.jobId ?? null,
         message: "Already processing this failure event",
       };
     }
 
-    // 2. Enqueue recovery job into BullMQ
-    const job = await recoveryQueue.add("recover", {
+    // 2. Run the ultra-fast UI Agent Synchronously
+    const uiMessage = await runCheckoutUIAgent(
+      payload.context as FailureContext,
+    );
+
+    // 3. Enqueue the asynchronous tool-using job
+    const job = await recoveryQueue.add(`immediate-${event.id}`, {
       ...payload,
       failureEventId: event.id,
+      isImmediateRecovery: true,
     } as RecoveryJobPayload);
 
-    const jobId = job.id!;
-
-    // 3. Create pending recovery_action row in audit DB
+    // 4. Create recovery_action row for audit
     await recoveryActionRepo.create({
       merchantId: payload.merchantId,
       failureEventId: event.id,
-      jobId,
+      jobId: job.id!,
       attemptNumber: payload.context.attempt_count + 1,
     });
 
     console.log(
-      `📥 Enqueued recovery job ${jobId} | merchant=${payload.merchantId} | category=${payload.context.failure_category}`
+      `📥 Instant checkout UI returned for ${payload.externalRef}. Queued immediate recovery job ${job.id}.`,
     );
 
-    return { isNew: true, jobId, message: "Recovery job accepted and queued" };
+    return {
+      isNew: true,
+      uiMessage,
+    };
   }
 
   /**

@@ -19,6 +19,8 @@ export interface ToolSchema {
 export interface FailureContext {
   failure_event_id: string;   // real merchant-side ID — passed so AI can call query_failure_context correctly
   customer_id: string;        // internal merchant customer ID — needed for notification tool calls (not PII)
+  customer_name: string;
+  order_status: string;
   failure_category: string;
   amount_bucket: string;      // kept for decision-rule risk bucketing
   attempt_count: number;
@@ -46,6 +48,9 @@ export interface RecoveryJobRequest {
 
 export interface RecoveryJobPayload extends RecoveryJobRequest {
   failureEventId: string;        // MCP server's own FailureEvent ID
+  isFollowUp?: boolean;          // Flag for FollowUpPoller jobs
+  isImmediateRecovery?: boolean; // Flag for checkout jobs
+  followUpScheduleId?: string;
 }
 
 // ─── Tool call relay (server → client) ───────────────────────────────────────

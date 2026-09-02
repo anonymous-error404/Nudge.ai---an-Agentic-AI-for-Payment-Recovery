@@ -7,18 +7,15 @@
  */
 
 import { sendNotificationSchema, executeSendNotification } from "./sendNotificationTool";
-import { retryPaymentSchema, executeRetryPayment } from "./retryPaymentTool";
 import { queryFailureContextSchema, executeQueryFailureContext } from "./queryFailureContextTool";
 import { escalateToHumanSchema, executeEscalateToHuman } from "./escalateToHumanTool";
 import { doNothingSchema, executeDoNothing } from "./doNothingTool";
-import { executeDeliverNotification } from "./deliverNotificationTool";
 
 // ─── Schemas sent to MCP server (these become AI's tool list) ─────────────
 
 export const TOOL_SCHEMAS = [
   queryFailureContextSchema,   // AI should call this first to gather context
   sendNotificationSchema,
-  retryPaymentSchema,
   escalateToHumanSchema,
   doNothingSchema,
 ];
@@ -30,11 +27,9 @@ type ToolResult = Record<string, unknown>;
 
 const TOOL_EXECUTORS: Record<string, (args: ToolArgs) => Promise<ToolResult>> = {
   send_notification:      (args) => executeSendNotification(args as any),
-  retry_payment:          (args) => executeRetryPayment(args as any),
   query_failure_context:  (args) => executeQueryFailureContext(args as any),
   escalate_to_human:      (args) => executeEscalateToHuman(args as any),
   do_nothing:             (args) => executeDoNothing(args as any),
-  deliver_notification:   (args) => executeDeliverNotification(args as any),  // internal only
 };
 
 /**

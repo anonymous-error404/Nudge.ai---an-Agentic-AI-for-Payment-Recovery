@@ -9,7 +9,7 @@ const router = Router();
  */
 router.post(
   "/mcp/tool-call",
-  mcpCallbackController.handleToolCall.bind(mcpCallbackController)
+  mcpCallbackController.handleToolCall.bind(mcpCallbackController),
 );
 
 /**
@@ -18,7 +18,17 @@ router.post(
  */
 router.post(
   "/mcp/job-complete",
-  mcpCallbackController.handleJobComplete.bind(mcpCallbackController)
+  mcpCallbackController.handleJobComplete.bind(mcpCallbackController),
 );
+
+import { TOOL_SCHEMAS } from "../tools";
+
+/**
+ * GET /mcp/tools
+ * Allows the MCP server (cron job) to dynamically fetch the merchant's supported tools.
+ */
+router.get("/mcp/tools", (req, res) => {
+  res.json({ schemas: TOOL_SCHEMAS });
+});
 
 export default router;

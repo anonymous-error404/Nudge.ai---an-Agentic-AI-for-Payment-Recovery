@@ -69,6 +69,7 @@ class WebhookService {
     });
 
     const { event: failureEvent, isNew } = await failureEventRepository.createIdempotent({
+      orderId: order.id,
       paymentId: payment.id,
       category,
       rootCause,
@@ -78,7 +79,7 @@ class WebhookService {
       await handlePaymentFailure(failureEvent.id, category, payment.id);
       console.log(`💥 Webhook: payment failed + orchestrator invoked: payment=${payload.id} | category=${category} | order=${order.id}`);
     } else {
-      console.log(`💥 Webhook: payment failed (already handled by frontend): payment=${payload.id} | category=${category}`);
+      console.log(`💥 Webhook: payment failed (duplicate webhook or already handled by frontend): payment=${payload.id} | category=${category}`);
     }
   }
 

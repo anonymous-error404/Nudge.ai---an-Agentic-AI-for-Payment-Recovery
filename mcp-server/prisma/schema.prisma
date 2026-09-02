@@ -19,6 +19,7 @@ model FailureEvent {
   paymentMethod      String
   detectedAt         DateTime         @default(now())
   recoveryActions    RecoveryAction[]
+  followUpSchedules  FollowUpSchedule[]
 
   @@unique([merchantId, externalRef])  // idempotency: same failure never logged twice
 }
@@ -37,4 +38,17 @@ model RecoveryAction {
   executedAt     DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model FollowUpSchedule {
+  id              String       @id @default(cuid())
+  merchantId      String
+  failureEventId  String
+  failureEvent    FailureEvent @relation(fields: [failureEventId], references: [id])
+  nextExecutionAt DateTime
+  status          String       @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([status, nextExecutionAt])
 }

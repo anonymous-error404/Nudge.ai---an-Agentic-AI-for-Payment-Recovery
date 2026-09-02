@@ -15,6 +15,8 @@ model Customer {
   name                      String
   phone                     String
   email                     String   @unique
+  password                  String   @default("password123")
+  role                      String   @default("customer") // customer | admin
   notificationPreferences   String   @default("email,sms") // comma-separated
   createdAt                 DateTime @default(now())
   orders                    Order[]
@@ -29,6 +31,7 @@ model Product {
   price       Int      // in paise (INR * 100)
   imageUrl    String   @default("")
   stock       Int      @default(100)
+  offers      String?  // Field for writing offers
   createdAt   DateTime @default(now())
   orders      Order[]
 
@@ -37,10 +40,12 @@ model Product {
 
 model Order {
   id               String      @id @default(cuid())
+  retryToken       String      @unique @default(cuid()) // URL-safe token for recovery links
   customerId       String
   productId        String
-  amount           Int         // in paise
-  status           String      @default("created") // created | attempted | paid | failed
+  quantity         Int         @default(1)             // number of units ordered
+  amount           Int         // in paise (quantity × unit price at time of order)
+  status           String      @default("created")    // created | attempted | paid | failed
   razorpayOrderId  String?     @unique
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt

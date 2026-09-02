@@ -4,10 +4,12 @@ import { RecoveryActionLog } from "../types";
 
 export class FailureEventRepository {
   async createIdempotent(params: {
+    orderId: string;
     paymentId: string;
     category: FailureCategory;
     rootCause: string;
   }) {
+    // Idempotency by Payment: Each failed payment attempt gets its own Failure Event
     const existing = await prisma.failureEvent.findFirst({
       where: { paymentId: params.paymentId },
       include: { recoveryActions: true },
@@ -84,6 +86,13 @@ export class FailureEventRepository {
     return prisma.recoveryAction.findMany({
       where: { failureEventId },
       orderBy: { attemptNumber: "desc" },
+    });
+  }
+
+  async getRecoveryActionsByOrderId(orderId: string) {
+    return prisma.recoveryAction.findMany({
+      where: { failureEvent: { payment: { orderId } } },
+      orderBy: { executedAt: "asc" },
     });
   }
 

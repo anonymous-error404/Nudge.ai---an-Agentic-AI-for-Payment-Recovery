@@ -9,6 +9,10 @@ router.post(
   checkoutController.simulateCheckout.bind(checkoutController),
 );
 router.get(
+  "/api/orders/retry/:token",
+  checkoutController.getOrderByRetryToken.bind(checkoutController),
+);
+router.get(
   "/api/payment/:razorpayPaymentId/status",
   checkoutController.getPaymentStatus.bind(checkoutController),
 );

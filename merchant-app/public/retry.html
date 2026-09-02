@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complete Your Purchase — TechZone</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
+  <div class="nav-links"></div>
+</nav>
+<script src="/auth.js"></script>
+
+<div class="container">
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading your order…</p>
+  </div>
+
+  <div id="retry-detail" class="product-detail" style="display:none;">
+
+    <!-- LEFT: Image + Product Info -->
+    <div class="product-left">
+      <div class="product-image-wrap">
+        <img id="product-image" src="" alt="" />
+      </div>
+      <div class="product-info">
+        <div class="retry-banner" style="display:flex; align-items:center; gap:0.5rem; color:var(--warning); margin-bottom:1rem; font-weight:600;">
+          <i data-lucide="clock" style="color:var(--warning);"></i>
+          <span>Previous payment failed — complete your purchase below</span>
+        </div>
+        <h1 id="product-name"></h1>
+        <p class="description" id="product-description"></p>
+        <div class="price" id="product-price"></div>
+        <div id="price-changed-notice" class="price-changed-notice" style="display:none; color:var(--warning); align-items:center; gap:0.5rem; margin-top:0.5rem; font-weight:500;">
+          <i data-lucide="info"></i> Price updated since your original order
+        </div>
+        <div class="price-sub">+ free delivery · 1 year warranty · 7-day return policy</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Checkout Card -->
+    <div class="product-right">
+      <div class="checkout-card">
+
+        <div class="form-group">
+          <label><i data-lucide="user"></i> Shopping as</label>
+          <div id="customer-display" style="font-size:0.9rem; color:var(--text); padding:0.5rem 0;"></div>
+        </div>
+
+        <div class="form-group">
+          <label><i data-lucide="package"></i> Quantity</label>
+          <div id="quantity-display" style="font-size:0.9rem; color:var(--text); padding:0.5rem 0;"></div>
+        </div>
+
+        <div id="stock-warning" class="real-mode-notice" style="display:none; border-left-color:var(--danger); background:rgba(220,38,38,0.1); margin-bottom:1rem; padding:1rem; border-left: 3px solid var(--danger);">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <i data-lucide="alert-triangle" style="color:var(--danger);"></i>
+            <strong style="color:var(--danger);">Out of stock.</strong>
+          </div>
+          <div style="margin-top:0.5rem; font-size:0.9rem; color:var(--text);">This product is no longer available in the quantity you ordered.</div>
+        </div>
+
+        <!-- ═══════ SIMULATE MODE UI ═══════ -->
+        <div id="simulate-ui">
+          <div class="form-group">
+            <label><i data-lucide="target"></i> Payment Outcome</label>
+            <div class="segmented-control" id="outcome-toggle">
+              <button type="button" class="segment outcome-success active" data-outcome="success">
+                <i data-lucide="check-circle"></i> Successful
+              </button>
+              <button type="button" class="segment outcome-fail" data-outcome="fail">
+                <i data-lucide="x-circle"></i> Failed
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" id="scenario-group" style="display:none;">
+            <label for="scenario-select"><i data-lucide="alert-triangle"></i> Failure Scenario</label>
+            <select id="scenario-select">
+              <option value="">Loading scenarios…</option>
+            </select>
+            <div id="scenario-preview" class="scenario-preview"></div>
+          </div>
+
+          <button id="retry-btn" class="btn btn-primary btn-block btn-lg" disabled>
+            <i data-lucide="rotate-ccw"></i> Retry Payment
+          </button>
+        </div>
+
+        <div style="margin-top:1rem; font-size:0.78rem; color: var(--text-muted); text-align:center; display:flex; justify-content:center; align-items:center; gap:0.5rem;">
+          <i data-lucide="shield-check" style="width:1rem; height:1rem;"></i> Secure · Same order · No duplicate charge
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="error-state" style="display:none; text-align:center; padding:4rem 2rem;">
+    <i data-lucide="alert-circle" style="width:3rem;height:3rem;color:var(--danger);margin-bottom:1rem;"></i>
+    <h2 id="error-message">Order not found</h2>
+    <a href="/" class="btn btn-primary" style="margin-top:1.5rem; display:inline-block;">Browse Store</a>
+  </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  const token = new URLSearchParams(window.location.search).get('token');
+  let orderData = null;
+  let failureScenarios = [];
+  let selectedOutcome = 'success';
+
+  async function loadOrder() {
+    if (!token) return showError('No retry token in URL.');
+
+    const [orderRes, scenariosRes] = await Promise.all([
+      fetch(`/api/orders/retry/${token}`),
+      fetch('/api/dev/failure-scenarios'),
+    ]);
+
+    const orderJson = await orderRes.json();
+    if (!orderJson.success) return showError(orderJson.error || 'Order not found.');
+    if (orderJson.data.status === 'paid') return showError('This order is already paid. No retry needed!');
+
+    const { data: scenarios } = await scenariosRes.json();
+    failureScenarios = scenarios;
+    orderData = orderJson.data;
+
+    // Populate UI
+    const d = orderData;
+    document.getElementById('product-image').src = d.product.imageUrl;
+    document.getElementById('product-image').alt = d.product.name;
+    document.getElementById('product-name').textContent = d.product.name;
+    document.getElementById('product-description').textContent = d.product.description;
+    document.getElementById('product-price').textContent =
+      '₹' + (d.currentTotal / 100).toLocaleString('en-IN');
+    document.getElementById('customer-display').textContent =
+      `${d.customer.name} (${d.customer.email})`;
+    document.getElementById('quantity-display').textContent =
+      `${d.quantity} unit${d.quantity > 1 ? 's' : ''}`;
+
+    // Show price change notice if price differs
+    if (d.originalAmount !== d.currentTotal) {
+      document.getElementById('price-changed-notice').style.display = 'flex';
+    }
+
+    // Stock check
+    if (!d.stockAvailable) {
+      document.getElementById('stock-warning').style.display = 'block';
+      document.getElementById('retry-btn').disabled = true;
+    } else {
+      document.getElementById('retry-btn').disabled = false;
+    }
+
+    // Populate scenario select
+    const scenarioSelect = document.getElementById('scenario-select');
+    scenarioSelect.innerHTML = failureScenarios.map(s =>
+      `<option value="${s.key}" data-method="${s.method}" data-desc="${s.description}" data-recovery="${s.expectedRecovery}">${s.label} (${s.method.toUpperCase()})</option>`
+    ).join('');
+    updateScenarioPreview();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('retry-detail').style.display = 'grid';
+    lucide.createIcons();
+  }
+
+  function showError(msg) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error-message').textContent = msg;
+    document.getElementById('error-state').style.display = 'block';
+    lucide.createIcons();
+  }
+
+  // ── Outcome toggle ─────────────────────────────────────────────────────────
+  document.getElementById('outcome-toggle').addEventListener('click', e => {
+    const btn = e.target.closest('.segment');
+    if (!btn) return;
+    selectedOutcome = btn.dataset.outcome;
+    document.querySelectorAll('#outcome-toggle .segment').forEach(s =>
+      s.classList.toggle('active', s === btn)
+    );
+    document.getElementById('scenario-group').style.display =
+      selectedOutcome === 'fail' ? 'block' : 'none';
+    validateForm();
+  });
+
+  document.getElementById('scenario-select').addEventListener('change', () => {
+    updateScenarioPreview();
+    validateForm();
+  });
+
+  function updateScenarioPreview() {
+    const sel = document.getElementById('scenario-select');
+    const opt = sel.options[sel.selectedIndex];
+    const preview = document.getElementById('scenario-preview');
+    if (opt && opt.value) {
+      preview.innerHTML = `
+        <div style="margin-bottom:0.25rem;"><span style="color:var(--text-muted);font-weight:500;">Method:</span> ${(opt.dataset.method || '').toUpperCase()}</div>
+        <div style="margin-bottom:0.25rem;"><span style="color:var(--text-muted);font-weight:500;">What happens:</span> ${opt.dataset.desc || '—'}</div>
+        <div><span style="color:var(--text-muted);font-weight:500;">Expected recovery:</span> <code style="background:var(--surface-3);padding:0.2rem 0.4rem;border-radius:4px;">${opt.dataset.recovery || '—'}</code></div>
+      `;
+    }
+  }
+
+  function validateForm() {
+    if (!orderData || !orderData.stockAvailable) return;
+    const scenarioKey = document.getElementById('scenario-select').value;
+    const ok = selectedOutcome === 'success' || !!scenarioKey;
+    document.getElementById('retry-btn').disabled = !ok;
+  }
+
+  // ── Retry button ──────────────────────────────────────────────────────────
+  document.getElementById('retry-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('retry-btn');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader-2" style="animation:spin 1s linear infinite;"></i> Processing…`;
+    lucide.createIcons();
+
+    const scenarioKey = document.getElementById('scenario-select').value;
+
+    try {
+      // Call simulate checkout — the server will reuse the same open order
+      const res = await fetch('/api/checkout/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: orderData.product.id,
+          customerId: orderData.customer.id,
+          outcome: selectedOutcome,
+          scenarioKey: selectedOutcome === 'fail' ? scenarioKey : undefined,
+        }),
+      });
+
+      const { success, data, error } = await res.json();
+      if (!success) throw new Error(error || 'Retry failed');
+
+      if (data.outcome === 'success') {
+        window.location.href =
+          `/success?payment_id=${encodeURIComponent(data.payment.id)}&order_id=${encodeURIComponent(data.order.razorpayOrderId)}&simulated=1`;
+        return;
+      }
+
+      // Failure — show toast and re-enable
+      const msg = data.recoveryDecision?.message || `Payment failed: ${data.scenario?.label}`;
+      showToastHTML(`
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;color:#f87171;">
+          <i data-lucide="x-circle" style="width:1.25rem;height:1.25rem;"></i>
+          <strong>Payment Failed Again</strong>
+        </div>
+        <div style="font-weight:400;line-height:1.4;">${msg}</div>
+      `, 'error', 6000);
+
+    } catch (err) {
+      showToastHTML(`
+        <div style="display:flex;align-items:center;gap:0.5rem;color:#f87171;">
+          <i data-lucide="alert-circle"></i> <b>Error:</b> ${err.message}
+        </div>
+      `, 'error');
+    } finally {
+      btn.innerHTML = originalHTML;
+      btn.disabled = false;
+      lucide.createIcons();
+    }
+  });
+
+  function showToastHTML(html, type, duration = 4000) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = html;
+    document.body.appendChild(toast);
+    lucide.createIcons({ root: toast });
+    setTimeout(() => toast.remove(), duration);
+  }
+
+  loadOrder().catch(err => showError('Failed to load order: ' + err.message));
+</script>
+</body>
+</html>

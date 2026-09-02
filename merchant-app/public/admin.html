@@ -11,11 +11,9 @@
 
 <nav>
   <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
-  <div class="nav-links">
-    <a href="/">Store</a>
-    <a href="/admin">Admin Panel</a>
-  </div>
+  <div class="nav-links"></div>
 </nav>
+<script src="/auth.js"></script>
 
 <div class="container">
   <h1 style="margin-bottom:0.25rem; letter-spacing:-0.02em; font-weight:800;">Recovery Agent Dashboard</h1>
@@ -160,7 +158,7 @@
 
     const ftbody = document.getElementById('failure-tbody');
     if (events.length === 0) {
-      ftbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted); padding:2rem;">No failure events yet</td></tr>';
+      ftbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--text-muted); padding:2rem;">No failure events yet</td></tr>';
     } else {
       ftbody.innerHTML = events.map(e => {
         const actions = e.recoveryActions.length

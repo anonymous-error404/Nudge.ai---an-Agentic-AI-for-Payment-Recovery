@@ -9,6 +9,8 @@ export const RecoveryJobSchema = z.object({
   context: z.object({
     failure_event_id: z.string(),
     customer_id: z.string(),
+    customer_name: z.string(),
+    order_status: z.string(),
     failure_category: z.string(),
     amount_bucket: z.string(),
     attempt_count: z.number().int().min(0),

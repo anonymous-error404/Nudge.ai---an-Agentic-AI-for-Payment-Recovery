@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Orders - TechZone</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .orders-container {
+      max-width: 900px;
+      margin: 2rem auto;
+      background: var(--surface);
+      padding: 2rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+    }
+    .order-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .order-card .order-info {
+      flex: 1;
+    }
+    .order-status {
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .status-paid { background: rgba(76, 201, 240, 0.15); color: var(--success); border: 1px solid rgba(76, 201, 240, 0.3); }
+    .status-failed { background: rgba(247, 37, 133, 0.15); color: var(--danger); border: 1px solid rgba(247, 37, 133, 0.3); }
+    .status-created { background: rgba(255, 179, 71, 0.15); color: var(--warning); border: 1px solid rgba(255, 179, 71, 0.3); }
+    
+    .retry-btn {
+      margin-top: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
+    <div class="nav-links"></div>
+  </nav>
+  <script src="/auth.js"></script>
+
+  <div class="container">
+    <div class="orders-container">
+      <h1 style="margin-bottom: 1.5rem; font-weight:800; font-size:1.8rem;">My Orders</h1>
+      <div id="loading">Loading orders...</div>
+      <div id="orders-list"></div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+    
+    async function fetchOrders() {
+      try {
+        const res = await fetch('/api/auth/my-orders');
+        const data = await res.json();
+        const list = document.getElementById('orders-list');
+        document.getElementById('loading').style.display = 'none';
+        
+        if (!data.success) {
+          list.innerHTML = `<p style="color:var(--danger)">Error: ${data.error}</p>`;
+          return;
+        }
+        
+        if (data.orders.length === 0) {
+          list.innerHTML = `<p style="color:var(--text-muted)">You haven't placed any orders yet.</p>`;
+          return;
+        }
+        
+        list.innerHTML = data.orders.map(order => {
+          let statusClass = 'status-created';
+          if (order.status === 'paid') statusClass = 'status-paid';
+          if (order.status === 'failed') statusClass = 'status-failed';
+          
+          const amountStr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(order.amount / 100);
+          const dateStr = new Date(order.createdAt).toLocaleDateString();
+          
+          let actionBtn = '';
+          if (order.status === 'failed' || order.status === 'created') {
+            actionBtn = `<a href="/retry?token=${order.retryToken}" class="btn btn-primary retry-btn">Retry Payment</a>`;
+          }
+          
+          return `
+            <div class="order-card">
+              <div class="order-info">
+                <h3 style="margin-bottom:0.25rem;">${order.product.name}</h3>
+                <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;">Order ID: ${order.id} &bull; ${dateStr}</div>
+                <div style="font-size:1.1rem; font-weight:700;">${amountStr}</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="order-status ${statusClass}">${order.status}</div>
+                ${actionBtn}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        document.getElementById('loading').innerHTML = 'Error loading orders.';
+      }
+    }
+    
+    // Make sure user is logged in first
+    fetch('/api/auth/me').then(res => res.json()).then(data => {
+      if (!data.success || !data.user || data.user.role === 'admin') {
+        window.location.href = '/login';
+      } else {
+        fetchOrders();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -12,26 +12,39 @@ class McpCallbackController {
    * We execute the tool locally and POST the result back to the MCP server.
    */
   async handleToolCall(req: Request, res: Response) {
-    const { jobId, tool, args } = req.body as {
+    const { jobId, tool, args, failureEventId } = req.body as {
       jobId: string;
       tool: string;
       args: Record<string, unknown>;
+      failureEventId?: string;
     };
 
     if (!jobId || !tool || !args) {
       return res.status(400).json({ success: false, error: "jobId, tool, and args are required" });
     }
 
-    // ACK immediately — we'll post the result back async
-    res.status(200).json({ success: true, message: "Tool call received, executing" });
-
-    // Execute tool locally and post result back to MCP server
     try {
       const result = await executeTool(tool, args);
-      await postToolResult(jobId, result);
+      
+      // Log the recovery action in the merchant DB (except context gathering)
+      if (failureEventId && tool !== "query_failure_context" && tool !== "draft_notification_copy") {
+        await import("../lib/prismaClient").then(({ prisma }) => 
+          prisma.recoveryAction.create({
+            data: {
+              failureEventId,
+              actionType: tool,
+              channel: args.channel ? String(args.channel) : null,
+              outcome: result.success === false ? "failed" : "success",
+              agentReasoning: result.message ? String(result.message) : null,
+            }
+          })
+        ).catch(e => console.warn("Failed to log recovery action in merchant DB:", e));
+      }
+
+      return res.status(200).json({ success: true, data: result });
     } catch (err) {
       console.error(`❌ Tool execution failed [${tool}]:`, err);
-      await postToolResult(jobId, { error: String(err), success: false });
+      return res.status(500).json({ success: false, error: String(err) });
     }
   }
 

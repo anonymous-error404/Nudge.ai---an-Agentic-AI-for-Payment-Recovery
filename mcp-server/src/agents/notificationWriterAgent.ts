@@ -3,19 +3,20 @@ import { NotificationChannel } from "../enums";
 
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Use the same capable model — gpt-oss-20b returns empty content for some prompts
 const WRITER_MODEL = "openai/gpt-oss-120b";
 
-const SYSTEM_PROMPT = `You are a customer communication specialist for a payments platform.
-Your job is to write short, empathetic, and effective recovery messages.
+const SYSTEM_PROMPT = `You are an expert customer communication specialist for TechZone, a premium tech store.
+Your job is to write short, empathetic, and highly converting payment recovery messages.
 
-Rules:
-- SMS: MAXIMUM 160 characters. Direct, warm, one clear CTA.
-- Email: 3-5 sentences. Friendly subject line + body. One CTA.
-- WhatsApp: Conversational tone, 2-3 short sentences. Emoji optional.
-
-Never mention competitor payment methods. Never sound robotic or threatening.
-Always include a clear next step for the customer.`;
+CRITICAL RULES:
+1. TONE: Be warm, empathetic, and professional. Never sound robotic or threatening.
+2. DISCRETION: NEVER explicitly state blunt failure reasons like "insufficient funds", "low balance", or "wrong pin". This embarrasses the customer. Instead, soften it (e.g., "There was a temporary issue processing your payment", "Your bank couldn't authorize the transaction").
+3. CURRENCY: Always format currency nicely with commas and the Rupee symbol (e.g., ₹7,999 instead of Rs.7999).
+4. FORMATTING:
+   - SMS: MAXIMUM 160 characters. Direct, one clear CTA.
+   - WhatsApp: Conversational tone, 2-3 short sentences. Emojis encouraged.
+   - Email: MUST output well-formatted HTML. Use <p> tags, <br>, and wrap the CTA in a clean <a href="[RETRY_LINK]" style="..."> button. Include a polite sign-off (e.g., "Best, TechZone Support").
+5. CTA: Always include a clear call-to-action placeholder "[RETRY_LINK]" instructing them to retry the payment.`;
 
 export interface NotificationContent {
   subject?: string; // for email
@@ -33,6 +34,7 @@ export async function runNotificationWriterAgent(params: {
   channel: NotificationChannel;
   amountBucket: string;
   merchantName?: string;
+  customerName?: string;
   orderDetails?: {
     product_name: string;
     product_description?: string;
@@ -44,19 +46,21 @@ export async function runNotificationWriterAgent(params: {
     failureCategory,
     channel,
     amountBucket,
-    merchantName = "the merchant",
+    merchantName = "TechZone",
+    customerName = "Customer",
     orderDetails,
   } = params;
 
   // Use specific product info if available, fall back to generic amount bucket
   const productLine = orderDetails
     ? `- Product: ${orderDetails.product_name}${orderDetails.product_description ? ` (${orderDetails.product_description})` : ""}`
-    : `- Amount range: Rs. ${amountBucket}`;
+    : `- Amount range: ${amountBucket}`;
   const amountLine = orderDetails
-    ? `- Exact amount: Rs. ${orderDetails.amount_rupees} ${orderDetails.currency}`
+    ? `- Exact amount: ${orderDetails.amount_rupees} ${orderDetails.currency}`
     : "";
 
   const prompt = `Write a payment recovery ${channel} message for this situation:
+- Customer Name: ${customerName} (Address them by their name)
 - Failure reason: ${failureCategory}
 ${productLine}
 ${amountLine}
@@ -68,11 +72,9 @@ ${channel === "email" ? "Include a subject line on the first line prefixed with 
 
 Return only the message content, nothing else.`;
 
-  // Token limits per channel: SMS is tiny, email needs room for subject + body
-  const maxTokens =
-    channel === NotificationChannel.SMS      ? 80  :
-    channel === NotificationChannel.WhatsApp ? 200 :
-    800; // email
+  // We enforce length via the prompt rather than max_tokens, 
+  // because some proxy models cut off immediately if max_tokens is too low.
+  const maxTokens = 1024;
 
   const response = await client.chat.completions.create({
     model: WRITER_MODEL,
