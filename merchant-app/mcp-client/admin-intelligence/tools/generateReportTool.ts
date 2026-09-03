@@ -23,20 +23,50 @@ export async function executeGenerateReport(args: { period_days?: number }): Pro
   const events = await prisma.failureEvent.findMany({
     where: { detectedAt: { gte: since } },
     include: {
-      recoveryActions: true,
-      payment: { include: { order: { include: { product: { select: { name: true } } } } } },
+      recoveryActions: { orderBy: { executedAt: "asc" } },
+      payment: {
+        include: {
+          order: {
+            include: {
+              customer: { select: { id: true } },
+              product: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
     },
     orderBy: { detectedAt: "desc" },
   });
 
   const total = events.length;
-  const recovered = events.filter((e) => e.recoveryActions.some((a) => a.outcome === "success"));
-  const atRisk = events.filter((e) => !e.recoveryActions.some((a) => a.outcome === "success"));
   const pending = events.filter((e) => e.recoveryActions.length === 0);
+  const inProgress: typeof events = [];
+  const confirmed: { event: typeof events[0]; repurchase: { amount: number; createdAt: Date } }[] = [];
 
-  const totalRecoveredPaise = recovered.reduce((s, e) => s + (e.payment?.order?.amount ?? 0), 0);
-  const totalAtRiskPaise = atRisk.reduce((s, e) => s + (e.payment?.order?.amount ?? 0), 0);
-  const recoveryRatePct = total > 0 ? ((recovered.length / total) * 100).toFixed(1) : "0.0";
+  // Real recovery = customer repurchased same product AFTER the failure
+  for (const e of events) {
+    const order = e.payment?.order;
+    if (!order?.customer?.id || !order?.product?.id || e.recoveryActions.length === 0) {
+      if (e.recoveryActions.length > 0) inProgress.push(e);
+      continue;
+    }
+    const repurchase = await prisma.order.findFirst({
+      where: {
+        id: order.id,
+        status: "paid",
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (repurchase) {
+      confirmed.push({ event: e, repurchase: { amount: repurchase.amount, createdAt: repurchase.updatedAt } });
+    } else {
+      inProgress.push(e);
+    }
+  }
+
+  const totalRecoveredPaise = confirmed.reduce((s, c) => s + c.repurchase.amount, 0);
+  const totalAtRiskPaise = events.reduce((s, e) => s + (e.payment?.order?.amount ?? 0), 0) - totalRecoveredPaise;
+  const recoveryRatePct = total > 0 ? ((confirmed.length / total) * 100).toFixed(1) : "0.0";
 
   // Category breakdown
   const catMap: Record<string, { count: number; amount: number }> = {};
@@ -48,14 +78,14 @@ export async function executeGenerateReport(args: { period_days?: number }): Pro
   }
   const catRows = Object.entries(catMap)
     .sort((a, b) => b[1].count - a[1].count)
-    .map(([cat, s]) => `| ${cat.replace(/_/g, " ")} | ${s.count} | \u20b9${Math.round(s.amount / 100).toLocaleString("en-IN")} |`)
+    .map(([cat, s]) => `| ${cat.replace(/_/g, " ")} | ${s.count} | ₹${Math.round(s.amount / 100).toLocaleString("en-IN")} |`)
     .join("\n");
 
-  // Recovery proof entries
-  const proofRows = recovered.slice(0, 10).map((e) => {
-    const action = e.recoveryActions.find((a) => a.outcome === "success");
-    const amt = Math.round((e.payment?.order?.amount ?? 0) / 100).toLocaleString("en-IN");
-    return `| ${e.classifiedCategory.replace(/_/g, " ")} | \u20b9${amt} | ${action?.actionType?.replace(/_/g, " ") ?? "—"} | ${action?.channel ?? "—"} | \u2713 Recovered |`;
+  const proofRows = confirmed.slice(0, 10).map(({ event: e, repurchase }) => {
+    const action = e.recoveryActions.find((a) => a.actionType !== "do_nothing") ?? e.recoveryActions[0];
+    const amt = Math.round(repurchase.amount / 100).toLocaleString("en-IN");
+    const hrs = ((repurchase.createdAt.getTime() - e.detectedAt.getTime()) / 3600000).toFixed(1);
+    return `| ${e.classifiedCategory.replace(/_/g, " ")} | ₹${amt} | ${action?.actionType?.replace(/_/g, " ") ?? "—"} | ${action?.channel ?? "—"} | ✓ Recovered in ${hrs}h |`;
   }).join("\n");
 
   const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -71,12 +101,15 @@ export async function executeGenerateReport(args: { period_days?: number }): Pro
 | Metric | Value |
 |--------|-------|
 | Total Failure Events | ${total} |
-| Successfully Recovered | ${recovered.length} |
-| Still At Risk | ${atRisk.length} |
-| Pending Recovery | ${pending.length} |
-| **Revenue Recovered** | **\u20b9${Math.round(totalRecoveredPaise / 100).toLocaleString("en-IN")}** |
-| Revenue At Risk | \u20b9${Math.round(totalAtRiskPaise / 100).toLocaleString("en-IN")} |
+| ✓ Confirmed Recoveries | ${confirmed.length} |
+| ⚡ In Progress (AI acted, awaiting payment) | ${inProgress.length} |
+| ⏳ Pending (no action yet) | ${pending.length} |
+| **Revenue Recovered** | **₹${Math.round(totalRecoveredPaise / 100).toLocaleString("en-IN")}** |
+| Revenue At Risk | ₹${Math.round(Math.max(0, totalAtRiskPaise) / 100).toLocaleString("en-IN")} |
 | **Recovery Rate** | **${recoveryRatePct}%** |
+
+> **Definition:** "Recovered" = customer paid the original failed order after retry.
+> "In Progress" = AI sent a recovery action but customer has not yet paid.
 
 ---
 
@@ -88,11 +121,11 @@ ${catRows || "| No data | — | — |"}
 
 ---
 
-## Recovery Proof (Recent Successes)
+## Confirmed Recovery Proof
 
-| Category | Amount | Action | Channel | Outcome |
-|----------|--------|--------|---------|---------|
-${proofRows || "| No successful recoveries in this period | — | — | — | — |"}
+| Category | Amount Recovered | Action Taken | Channel | Outcome |
+|----------|-----------------|--------------|---------|---------|
+${proofRows || "| No confirmed recoveries in this period — payment required | — | — | — | — |"}
 
 ---
 
@@ -104,3 +137,4 @@ All recovery actions were executed by the AI Recovery Agent with full logging. A
 
   return { report };
 }
+

@@ -21,24 +21,48 @@ export async function executeRankCustomers(args: { limit?: number }) {
   const events = await prisma.failureEvent.findMany({
     include: {
       recoveryActions: true,
-      payment: { include: { order: { include: { customer: { select: { id: true } } } } } },
+      payment: {
+        include: {
+          order: {
+            include: {
+              customer: { select: { id: true } },
+              product: { select: { id: true } },
+            },
+          },
+        },
+      },
     },
   });
 
   // Aggregate by customerId - NO names, NO emails
   const byCustomer: Record<string, { failureCount: number; atRiskPaise: number; lastFailureAt: Date }> = {};
+
   for (const e of events) {
     const customerId = e.payment?.order?.customer?.id;
+    const productId = e.payment?.order?.product?.id;
     if (!customerId) continue;
-    const isRecovered = e.recoveryActions.some((a) => a.outcome === "success");
+
     if (!byCustomer[customerId]) {
       byCustomer[customerId] = { failureCount: 0, atRiskPaise: 0, lastFailureAt: e.detectedAt };
     }
     byCustomer[customerId].failureCount++;
-    if (!isRecovered) byCustomer[customerId].atRiskPaise += e.payment?.order?.amount ?? 0;
     if (e.detectedAt > byCustomer[customerId].lastFailureAt) {
       byCustomer[customerId].lastFailureAt = e.detectedAt;
     }
+
+    // A failure is "at-risk" only if the customer hasn't since repurchased the same product
+    let isConfirmedRecovery = false;
+    if (productId && e.recoveryActions.length > 0) {
+      const repurchase = await prisma.order.findFirst({
+        where: {
+          id: e.payment?.order?.id,
+          status: "paid",
+        },
+        select: { id: true },
+      });
+      isConfirmedRecovery = !!repurchase;
+    }
+    if (!isConfirmedRecovery) byCustomer[customerId].atRiskPaise += e.payment?.order?.amount ?? 0;
   }
 
   const ranked = Object.values(byCustomer)
@@ -55,3 +79,4 @@ export async function executeRankCustomers(args: { limit?: number }) {
 
   return { customers: ranked };
 }
+

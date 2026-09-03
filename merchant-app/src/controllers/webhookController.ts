@@ -4,10 +4,15 @@ import { webhookService } from "../services/webhookService";
 
 class WebhookController {
   async handleWebhook(req: Request, res: Response) {
-    res.status(200).json({ status: "ok" });
-    const event = req.body as RazorpayWebhookEvent;
-    // Process event asynchronously after ACK
-    webhookService.processEvent(event);
+    let event: RazorpayWebhookEvent;
+    if (Buffer.isBuffer(req.body)) {
+      event = JSON.parse(req.body.toString("utf8")) as RazorpayWebhookEvent;
+    } else {
+      event = req.body as RazorpayWebhookEvent;
+    }
+    // Process synchronously so self-POST callers (simulator) can read the uiMessage
+    const result = await webhookService.processEvent(event);
+    res.status(200).json({ status: "ok", ...result });
   }
 }
 

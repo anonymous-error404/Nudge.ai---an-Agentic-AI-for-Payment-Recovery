@@ -3,6 +3,7 @@ import { productRepository } from "../repositories/productRepository";
 import { orderRepository } from "../repositories/orderRepository";
 import { failureEventRepository } from "../repositories/failureEventRepository";
 import { customerRepository } from "../repositories/customerRepository";
+import { prisma } from "../lib/prismaClient";
 
 class ShopController {
   async getProducts(req: Request, res: Response) {
@@ -47,7 +48,33 @@ class ShopController {
   async getFailureEvents(req: Request, res: Response) {
     try {
       const events = await failureEventRepository.findAll();
-      res.json({ success: true, data: events });
+
+      // Annotate each event with a real confirmedRecovery flag:
+      // true = same customer later placed a PAID order for the same product AFTER the failure.
+      // This is the only honest definition of "recovered".
+      const annotated = await Promise.all(
+        events.map(async (e) => {
+          const order = (e as any).payment?.order;
+          const customerId = order?.customer?.id;
+          const productId = order?.product?.id;
+
+          let confirmedRecovery = false;
+          if (customerId && productId && e.recoveryActions?.length > 0) {
+            const repurchase = await prisma.order.findFirst({
+              where: {
+                id: order.id,
+                status: "paid",
+              },
+              select: { id: true },
+            });
+            confirmedRecovery = !!repurchase;
+          }
+
+          return { ...e, confirmedRecovery };
+        }),
+      );
+
+      res.json({ success: true, data: annotated });
     } catch (err) {
       console.error("Error fetching failure events:", err);
       res

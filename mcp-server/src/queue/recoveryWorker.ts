@@ -38,6 +38,7 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
     merchantId,
     merchantCallbackUrl,
     failureEventId,
+    externalRef, // <-- Extract externalRef
     context,
     toolSchemas,
     isFollowUp,
@@ -160,7 +161,7 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
         merchantCallbackUrl,
         tool,
         args,
-        failureEventId,
+        externalRef, // Use merchant's actual ID
       );
     };
 

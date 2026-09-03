@@ -3,82 +3,161 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Intelligence Panel — TechZone</title>
+  <title>Admin Intelligence — TechZone</title>
   <link rel="stylesheet" href="/style.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    .tab-bar { display:flex; gap:.25rem; margin-bottom:2rem; border-bottom:1px solid var(--border); }
-    .tab-btn { padding:.6rem 1.2rem; border:none; background:none; color:var(--text-muted); font-size:.9rem; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; display:flex; align-items:center; gap:.4rem; transition:color .15s,border-color .15s; }
-    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
-    .tab-content { display:none; }
-    .tab-content.active { display:block; }
-    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:1rem; margin-bottom:2rem; }
-    .kpi-card { background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:1.2rem 1.4rem; }
-    .kpi-card .kpi-label { font-size:.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.4rem; }
+    /* ── App shell ──────────────────────────────────────────────────── */
+    html,body { height:100%; margin:0; overflow:hidden; }
+    body { display:flex; flex-direction:column; background:var(--bg); }
+
+    /* ── Top nav ────────────────────────────────────────────────────── */
+    .admin-nav {
+      display:flex; align-items:center; gap:0; padding:0 1.5rem;
+      height:52px; border-bottom:1px solid var(--border);
+      background:var(--surface); flex-shrink:0; z-index:50;
+    }
+    .admin-nav .brand { display:flex; align-items:center; gap:.5rem; font-weight:800; font-size:1rem; color:var(--text); text-decoration:none; margin-right:2rem; }
+    .admin-nav .brand svg { width:18px; height:18px; color:var(--accent); }
+    .nav-tab {
+      display:flex; align-items:center; gap:.4rem; padding:.9rem 1.1rem;
+      font-size:.85rem; font-weight:600; color:var(--text-muted);
+      cursor:pointer; border:none; background:none;
+      border-bottom:2px solid transparent; margin-bottom:-1px;
+      transition:color .15s, border-color .15s; height:52px; box-sizing:border-box;
+    }
+    .nav-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .nav-tab svg { width:14px; height:14px; }
+    .nav-right { margin-left:auto; display:flex; align-items:center; gap:1rem; font-size:.78rem; color:var(--text-muted); }
+
+    /* ── Pages ──────────────────────────────────────────────────────── */
+    .page { display:none; flex:1; overflow:hidden; min-height:0; }
+    .page.active { display:flex; flex-direction:column; }
+
+    /* ── Analytics ──────────────────────────────────────────────────── */
+    .analytics-scroll { flex:1; overflow-y:auto; padding:2rem; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin-bottom:2rem; }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.2rem 1.4rem; }
+    .kpi-card .kpi-label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
     .kpi-card .kpi-value { font-size:1.6rem; font-weight:800; letter-spacing:-.03em; }
-    .kpi-card.green .kpi-value { color:#22c55e; } .kpi-card.red .kpi-value { color:#ef4444; } .kpi-card.amber .kpi-value { color:#f59e0b; } .kpi-card.blue .kpi-value { color:#3b82f6; }
-    .breakdown-row { display:grid; grid-template-columns:1fr 2fr; gap:1.5rem; align-items:start; margin-bottom:2.5rem; }
-    .donut-wrap { background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:1.4rem; }
-    .donut-wrap h3 { font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:1rem; }
+    .kpi-card.green .kpi-value{color:#22c55e} .kpi-card.red .kpi-value{color:#ef4444}
+    .kpi-card.amber .kpi-value{color:#f59e0b} .kpi-card.blue .kpi-value{color:#3b82f6}
+    .breakdown-row { display:grid; grid-template-columns:1fr 2fr; gap:1.5rem; margin-bottom:2rem; }
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.4rem; }
+    .panel-title { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:1rem; }
     .donut-legend { display:flex; flex-direction:column; gap:.6rem; }
-    .donut-item { display:flex; align-items:center; gap:.6rem; font-size:.85rem; }
-    .donut-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-    .donut-item-name { flex:1; }
-    .donut-item-count { font-weight:700; }
-    .section-header { display:flex; align-items:center; gap:.5rem; font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin:2rem 0 1rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
-    .proof-badge { display:inline-block; padding:.15rem .5rem; border-radius:4px; font-size:.75rem; font-weight:600; }
-    .proof-badge.recovered { background:rgba(34,197,94,.15); color:#22c55e; }
-    .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 240px); min-height:500px; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
-    .chat-header { padding:1rem 1.4rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:.6rem; font-weight:700; font-size:.9rem; }
-    .chat-header .status-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.2); }
-    .chat-messages { flex:1; overflow-y:auto; padding:1.5rem; display:flex; flex-direction:column; gap:1.2rem; }
-    .chat-msg { display:flex; gap:.8rem; max-width:82%; }
-    .chat-msg.user { align-self:flex-end; flex-direction:row-reverse; }
-    .chat-msg.assistant { align-self:flex-start; }
-    .msg-avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; flex-shrink:0; }
+    .donut-item { display:flex; align-items:center; gap:.6rem; font-size:.84rem; }
+    .donut-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+    .section-hdr { display:flex; align-items:center; gap:.5rem; font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin:2rem 0 .75rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+    .proof-badge { display:inline-block; padding:.15rem .5rem; border-radius:4px; font-size:.74rem; font-weight:600; background:rgba(34,197,94,.15); color:#22c55e; }
+    .audit-row { cursor:pointer; transition:background .1s; }
+    .audit-row:hover { background:rgba(255,255,255,.03); }
+
+    /* ── Drawer ─────────────────────────────────────────────────────── */
+    .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:200; display:none; }
+    .drawer-overlay.open { display:block; }
+    .drawer {
+      position:fixed; right:0; top:0; bottom:0; width:460px; max-width:95vw;
+      background:var(--surface); border-left:1px solid var(--border);
+      z-index:201; display:flex; flex-direction:column;
+      transform:translateX(100%); transition:transform .25s cubic-bezier(.4,0,.2,1);
+    }
+    .drawer.open { transform:translateX(0); }
+    .drawer-header { display:flex; align-items:center; gap:.75rem; padding:1.2rem 1.4rem; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .drawer-title { font-weight:700; font-size:.95rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .drawer-close { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:.3rem; border-radius:6px; display:flex; line-height:1; }
+    .drawer-close:hover { background:rgba(255,255,255,.06); color:var(--text); }
+    .drawer-body { flex:1; overflow-y:auto; padding:1.4rem; }
+    .detail-section { margin-bottom:1.8rem; }
+    .detail-section-title { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:.75rem; padding-bottom:.4rem; border-bottom:1px solid var(--border); }
+    .detail-kv { display:flex; justify-content:space-between; align-items:flex-start; gap:.5rem; padding:.45rem 0; font-size:.85rem; border-bottom:1px solid rgba(255,255,255,.04); }
+    .detail-kv:last-child { border-bottom:none; }
+    .detail-k { color:var(--text-muted); flex-shrink:0; }
+    .detail-v { font-weight:600; text-align:right; word-break:break-word; max-width:260px; }
+    .action-card { background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:8px; padding:.9rem 1rem; margin-bottom:.75rem; }
+    .action-card-header { display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem; flex-wrap:wrap; }
+    .action-num { width:22px; height:22px; border-radius:50%; background:var(--accent); color:white; font-size:.7rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .action-type { font-weight:700; font-size:.85rem; text-transform:capitalize; }
+    .action-time { margin-left:auto; font-size:.74rem; color:var(--text-muted); white-space:nowrap; }
+    .action-reasoning { font-size:.8rem; color:var(--text-muted); line-height:1.55; margin-top:.45rem; padding-top:.45rem; border-top:1px solid rgba(255,255,255,.06); word-break:break-word; overflow-wrap:anywhere; }
+
+    /* ── Chat page ──────────────────────────────────────────────────── */
+    .chat-page { display:flex; flex-direction:column; flex:1; overflow:hidden; }
+    .chat-messages { flex:1; overflow-y:auto; padding:2rem 0; display:flex; flex-direction:column; gap:0; }
+    .chat-msg-wrap { padding:.4rem 0; display:flex; justify-content:center; }
+    .chat-msg-inner { width:100%; max-width:740px; padding:0 1.5rem; display:flex; gap:.75rem; align-items:flex-start; }
+    .chat-msg-inner.user { flex-direction:row-reverse; }
+    .msg-avatar { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; flex-shrink:0; margin-top:.1rem; }
     .msg-avatar.user-av { background:var(--accent); color:white; }
     .msg-avatar.ai-av { background:#7c3aed; color:white; }
-    .msg-bubble { padding:.75rem 1rem; border-radius:12px; font-size:.88rem; line-height:1.6; max-width:100%; word-break:break-word; }
-    .chat-msg.user .msg-bubble { background:var(--accent); color:white; border-bottom-right-radius:4px; }
-    .chat-msg.assistant .msg-bubble { background:rgba(255,255,255,.04); border:1px solid var(--border); border-bottom-left-radius:4px; }
-    .msg-bubble pre { background:rgba(0,0,0,.3); border-radius:6px; padding:.6rem .8rem; overflow-x:auto; font-size:.8rem; margin:.5rem 0; }
-    .msg-bubble table { border-collapse:collapse; width:100%; margin:.5rem 0; font-size:.82rem; }
-    .msg-bubble th,.msg-bubble td { border:1px solid var(--border); padding:.3rem .6rem; text-align:left; }
+    .msg-body { flex:1; min-width:0; }
+    .msg-name { font-size:.74rem; font-weight:600; color:var(--text-muted); margin-bottom:.3rem; }
+    .msg-bubble { font-size:.9rem; line-height:1.7; color:var(--text); word-break:break-word; }
+    .chat-msg-inner.user .msg-bubble {
+      background:var(--accent); color:white; padding:.7rem 1.1rem;
+      border-radius:18px 18px 4px 18px; display:inline-block; max-width:78%;
+    }
+    .msg-bubble pre { background:rgba(0,0,0,.35); border-radius:7px; padding:.7rem 1rem; overflow-x:auto; font-size:.8rem; margin:.5rem 0; }
+    .msg-bubble table { border-collapse:collapse; width:100%; margin:.5rem 0; font-size:.83rem; }
+    .msg-bubble th,.msg-bubble td { border:1px solid var(--border); padding:.35rem .65rem; text-align:left; }
     .msg-bubble th { background:rgba(255,255,255,.05); font-weight:600; }
-    .typing-indicator { display:flex; gap:4px; align-items:center; padding:.5rem 0; }
+    .typing-indicator { display:flex; gap:4px; align-items:center; padding:.4rem 0; }
     .typing-dot { width:7px; height:7px; border-radius:50%; background:var(--text-muted); animation:bounce 1.2s infinite; }
-    .typing-dot:nth-child(2) { animation-delay:.2s; } .typing-dot:nth-child(3) { animation-delay:.4s; }
-    @keyframes bounce { 0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-6px);opacity:1} }
-    .chat-input-area { padding:1rem 1.4rem; border-top:1px solid var(--border); display:flex; gap:.75rem; }
-    .chat-input { flex:1; padding:.7rem 1rem; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:.9rem; outline:none; resize:none; font-family:inherit; }
-    .chat-input:focus { border-color:var(--accent); }
-    .chat-send-btn { padding:.7rem 1.2rem; background:var(--accent); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.4rem; font-size:.88rem; transition:opacity .15s; }
-    .chat-send-btn:disabled { opacity:.5; cursor:not-allowed; }
-    .chat-suggestions { display:flex; flex-wrap:wrap; gap:.5rem; padding:0 1.4rem .75rem; }
-    .suggestion-chip { padding:.35rem .75rem; background:transparent; border:1px solid var(--border); border-radius:20px; font-size:.78rem; color:var(--text-muted); cursor:pointer; transition:border-color .15s,color .15s; }
-    .suggestion-chip:hover { border-color:var(--accent); color:var(--accent); }
+    .typing-dot:nth-child(2){animation-delay:.2s} .typing-dot:nth-child(3){animation-delay:.4s}
+    @keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-6px);opacity:1}}
+    .cursor-blink { display:inline-block; width:2px; height:1em; background:currentColor; margin-left:1px; animation:blink .7s step-end infinite; vertical-align:text-bottom; opacity:.8; }
+    @keyframes blink{50%{opacity:0}}
+
+    /* Welcome */
+    .chat-welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; padding:3rem 1.5rem; text-align:center; }
+    .chat-welcome-icon { width:58px; height:58px; border-radius:16px; background:#7c3aed; display:flex; align-items:center; justify-content:center; font-size:1.7rem; margin-bottom:1.2rem; }
+    .chat-welcome h2 { font-size:1.3rem; font-weight:800; margin:0 0 .35rem; }
+    .chat-welcome p { color:var(--text-muted); font-size:.88rem; margin:0 0 1.6rem; }
+    .suggestions-grid { display:flex; flex-wrap:nowrap; overflow-x:auto; gap:.55rem; padding-bottom:.2rem; scrollbar-width:none; width:100%; }
+    .suggestions-grid::-webkit-scrollbar { display:none; }
+    .sug-btn { padding:.55rem 1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:.82rem; color:var(--text); cursor:pointer; transition:border-color .15s,background .15s; text-align:left; font-family:inherit; white-space:nowrap; flex-shrink:0; }
+    .sug-btn:hover { border-color:var(--accent); background:rgba(99,102,241,.08); }
+
+    /* Input bar */
+    .chat-input-bar { flex-shrink:0; padding:.75rem 1.5rem 1.25rem; display:flex; justify-content:center; }
+    .chat-input-wrap { width:100%; max-width:740px; background:var(--surface); border:1px solid var(--border); border-radius:14px; display:flex; flex-direction:column; overflow:hidden; transition:border-color .15s; }
+    .chat-input-wrap:focus-within { border-color:var(--accent); }
+    .chat-input { padding:.9rem 1.1rem .4rem; background:transparent; border:none; color:var(--text); font-size:.9rem; outline:none; resize:none; font-family:inherit; max-height:160px; line-height:1.5; }
+    .chat-input-footer { display:flex; align-items:center; justify-content:space-between; padding:.35rem .75rem .6rem; }
+    .chat-input-hint { font-size:.71rem; color:var(--text-muted); }
+    .chat-send-btn { padding:.45rem .9rem; background:var(--accent); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:.35rem; font-size:.82rem; transition:opacity .15s; font-family:inherit; }
+    .chat-send-btn:disabled { opacity:.4; cursor:not-allowed; }
+    .chat-send-btn svg { width:13px; height:13px; }
   </style>
 </head>
 <body>
-<nav>
-  <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
-  <div class="nav-links"></div>
+
+<!-- Top nav -->
+<nav class="admin-nav">
+  <a class="brand" href="/"><i data-lucide="zap"></i> TechZone</a>
+  <button class="nav-tab active" onclick="showPage('analytics',this)">
+    <i data-lucide="bar-chart-2"></i> Analytics
+  </button>
+  <button class="nav-tab" onclick="showPage('chat',this)">
+    <i data-lucide="message-square"></i> AI Analyst
+  </button>
+  <div class="nav-right">
+    <a href="/orders" style="color:var(--text-muted);text-decoration:none;">Orders</a>
+    <span id="last-refresh">–</span>
+  </div>
 </nav>
 <script src="/auth.js"></script>
 
-<div class="container" style="max-width:1200px;padding-bottom:3rem;">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem;">
-    <h1 style="margin:0;letter-spacing:-.02em;font-weight:800;">Admin Intelligence Panel</h1>
-    <span style="font-size:.78rem;color:var(--text-muted);" id="last-refresh">–</span>
-  </div>
-  <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:.88rem;">Live payment recovery analytics + AI analyst · Auto-refreshes every 30s</p>
+<!-- ── Analytics Page ──────────────────────────────────────────────── -->
+<div class="page active" id="page-analytics">
+  <div class="analytics-scroll">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+      <div>
+        <h2 style="margin:0;font-weight:800;font-size:1.25rem;">Payment Recovery Dashboard</h2>
+        <p style="margin:.2rem 0 0;font-size:.82rem;color:var(--text-muted);">Live analytics · auto-refreshes every 30s</p>
+      </div>
+    </div>
 
-  <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('analytics',this)"><i data-lucide="bar-chart-2" style="width:14px;height:14px;"></i> Analytics</button>
-    <button class="tab-btn" onclick="switchTab('chat',this)"><i data-lucide="message-square" style="width:14px;height:14px;"></i> Merchant AI Chat</button>
-  </div>
-
-  <div id="tab-analytics" class="tab-content active">
     <div class="kpi-grid">
       <div class="kpi-card blue"><div class="kpi-label">Total Failures</div><div class="kpi-value" id="kpi-failures">—</div></div>
       <div class="kpi-card red"><div class="kpi-label">Still At Risk</div><div class="kpi-value" id="kpi-atrisk">—</div></div>
@@ -87,94 +166,124 @@
       <div class="kpi-card blue"><div class="kpi-label">Pending Recovery</div><div class="kpi-value" id="kpi-pending">—</div></div>
       <div class="kpi-card green"><div class="kpi-label">Avg Hrs to Recover</div><div class="kpi-value" id="kpi-avghrs">—</div></div>
     </div>
+
     <div class="breakdown-row">
-      <div class="donut-wrap">
-        <h3>Failure Categories</h3>
+      <div class="panel">
+        <div class="panel-title">Failure Categories</div>
         <div class="donut-legend" id="breakdown-legend"><div style="color:var(--text-muted);font-size:.8rem;">Loading…</div></div>
       </div>
-      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:1.4rem;">
-        <h3 style="font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:1rem;">Customer Risk Leaderboard</h3>
+      <div class="panel">
+        <div class="panel-title">Customer Risk Leaderboard</div>
         <div style="overflow-x:auto;">
-          <table class="failure-table" id="risk-table" style="font-size:.82rem;">
+          <table class="failure-table" style="font-size:.82rem;">
             <thead><tr><th>#</th><th>Customer</th><th>Failures</th><th>At Risk</th><th>Last Failure</th></tr></thead>
             <tbody id="risk-tbody"><tr><td colspan="5" style="color:var(--text-muted);text-align:center;">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
     </div>
-    <div class="section-header"><i data-lucide="shield-check" style="width:14px;height:14px;"></i> Proof of Recovery — Confirmed Successful Recoveries</div>
+
+    <div class="section-hdr"><i data-lucide="shield-check" style="width:13px;height:13px;"></i> Proof of Recovery — Confirmed Successful Recoveries</div>
     <div style="overflow-x:auto;margin-bottom:2rem;">
-      <table class="failure-table" id="proof-table">
+      <table class="failure-table">
         <thead><tr><th>Category</th><th>Amount</th><th>Recovery Action</th><th>Channel</th><th>Status</th><th>Detected</th><th>AI Reasoning</th></tr></thead>
         <tbody id="proof-tbody"><tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:2rem;">Loading…</td></tr></tbody>
       </table>
     </div>
-    <div class="section-header"><i data-lucide="list" style="width:14px;height:14px;"></i> Full Failure & Recovery Audit Trail</div>
-    <div style="overflow-x:auto;">
-      <table class="failure-table" id="audit-table">
-        <thead><tr><th>Customer</th><th>Product</th><th>Amount</th><th>Category</th><th>Actions Taken</th><th>Outcome</th><th>Detected</th></tr></thead>
+
+    <div class="section-hdr">
+      <i data-lucide="list" style="width:13px;height:13px;"></i> Full Failure &amp; Recovery Audit Trail
+      <span style="margin-left:.4rem;font-size:.72rem;font-weight:400;color:var(--text-muted);">Click any row for full details</span>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:3rem;">
+      <table class="failure-table">
+        <thead><tr><th>Customer</th><th>Product</th><th>Amount</th><th>Category</th><th>Latest Action</th><th>Outcome</th><th>Detected</th></tr></thead>
         <tbody id="audit-tbody"><tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:2rem;">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
+</div>
 
-  <div id="tab-chat" class="tab-content">
-    <div class="chat-layout">
-      <div class="chat-header">
-        <div class="status-dot"></div>
-        <span>Merchant Intelligence Agent</span>
-        <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted);font-weight:400;">All data anonymized · Read-only access</span>
+<!-- ── Chat Page ─────────────────────────────────────────────────────── -->
+<div class="page" id="page-chat">
+  <div class="chat-page">
+    <div class="chat-messages" id="chat-messages">
+      <div id="chat-welcome" class="chat-welcome">
+        <div class="chat-welcome-icon">🤖</div>
+        <h2>Merchant Intelligence Agent</h2>
+        <p>Ask me anything about your payment failures and recovery performance.<br>All data is anonymised — read-only access.</p>
       </div>
-      <div class="chat-messages" id="chat-messages">
-        <div class="chat-msg assistant">
-          <div class="msg-avatar ai-av">AI</div>
-          <div class="msg-bubble">
-            👋 Hey! I am your Merchant Intelligence Agent. I can help you analyze payment recovery data in real time.<br><br>
-            Try asking:<br>
-            • <em>What is our recovery rate this week?</em><br>
-            • <em>Which failure category costs us the most?</em><br>
-            • <em>Generate a full recovery report</em><br>
-            • <em>Rank customers by failure count</em>
+    </div>
+    <div class="chat-input-bar">
+      <div style="width:100%; max-width:740px; display:flex; flex-direction:column; gap:0.6rem;">
+        <div class="suggestions-grid" id="chat-suggestions">
+          <button class="sug-btn" onclick="sendSuggestion(this)">📊 What's our recovery rate this week?</button>
+          <button class="sug-btn" onclick="sendSuggestion(this)">💸 Which failure category costs us the most?</button>
+          <button class="sug-btn" onclick="sendSuggestion(this)">📋 Generate a full recovery report</button>
+          <button class="sug-btn" onclick="sendSuggestion(this)">🏆 Rank customers by failure count</button>
+          <button class="sug-btn" onclick="sendSuggestion(this)">⏱️ Average time to recover a payment?</button>
+          <button class="sug-btn" onclick="sendSuggestion(this)">⚡ How many cases are still in progress?</button>
+        </div>
+        <div class="chat-input-wrap">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask anything about your payment data…" rows="1"
+            onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+          <div class="chat-input-footer">
+            <span class="chat-input-hint">Enter to send · Shift+Enter for new line</span>
+            <button class="chat-send-btn" id="chat-send" onclick="sendChatMessage()">
+              <i data-lucide="send"></i> Send
+            </button>
           </div>
         </div>
-      </div>
-      <div class="chat-suggestions" id="chat-suggestions">
-        <button class="suggestion-chip" onclick="sendSuggestion(this)">📊 Recovery rate this week</button>
-        <button class="suggestion-chip" onclick="sendSuggestion(this)">💸 Top failure categories by amount</button>
-        <button class="suggestion-chip" onclick="sendSuggestion(this)">📋 Generate full recovery report</button>
-        <button class="suggestion-chip" onclick="sendSuggestion(this)">🏆 Rank customers by failures</button>
-        <button class="suggestion-chip" onclick="sendSuggestion(this)">⏱️ Average time to recover</button>
-      </div>
-      <div class="chat-input-area">
-        <textarea class="chat-input" id="chat-input" placeholder="Ask anything about your payment failures and recoveries…" rows="1" onkeydown="handleChatKey(event)"></textarea>
-        <button class="chat-send-btn" id="chat-send" onclick="sendChatMessage()"><i data-lucide="send" style="width:14px;height:14px;"></i> Send</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- ── Drawer ─────────────────────────────────────────────────────────── -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <i data-lucide="activity" style="width:16px;height:16px;color:var(--accent);flex-shrink:0;"></i>
+    <span class="drawer-title" id="drawer-title">Event Details</span>
+    <button class="drawer-close" onclick="closeDrawer()"><i data-lucide="x" style="width:16px;height:16px;"></i></button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</div>
+
 <script>
-const CAT_COLORS = {insufficient_funds:'#f59e0b',wrong_pin:'#3b82f6',abandoned:'#8b5cf6',do_not_honor:'#ef4444',psp_timeout:'#ec4899',fraud_block:'#dc2626',unknown:'#6b7280'};
-const CAT_LABELS = {insufficient_funds:'Insufficient Funds',wrong_pin:'Wrong PIN',abandoned:'Abandoned',do_not_honor:'Do Not Honor',psp_timeout:'PSP Timeout',fraud_block:'Fraud Block',unknown:'Unknown'};
-const ACT_ICONS = {send_notification:'📩',escalate_to_human:'🚨',do_nothing:'⏸'};
+const CAT_COLORS={insufficient_funds:'#f59e0b',wrong_pin:'#3b82f6',abandoned:'#8b5cf6',do_not_honor:'#ef4444',psp_timeout:'#ec4899',fraud_block:'#dc2626',unknown:'#6b7280'};
+const CAT_LABELS={insufficient_funds:'Insufficient Funds',wrong_pin:'Wrong PIN',abandoned:'Abandoned',do_not_honor:'Do Not Honor',psp_timeout:'PSP Timeout',fraud_block:'Fraud Block',unknown:'Unknown'};
+const ACT_ICONS={send_notification:'📩',escalate_to_human:'🚨',do_nothing:'⏸'};
 
-function fmtINR(p){ return '₹'+(p/100).toLocaleString('en-IN',{maximumFractionDigits:0}); }
-function timeAgo(d){ const s=Date.now()-new Date(d).getTime(),m=Math.floor(s/60000),h=Math.floor(m/60),dy=Math.floor(h/24); return dy>0?`${dy}d ago`:h>0?`${h}h ago`:m>0?`${m}m ago`:'just now'; }
-function bdg(t,c){ return `<span class="badge ${c}">${t}</span>`; }
-
-function switchTab(n,btn){
-  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('tab-'+n).classList.add('active');
-  btn.classList.add('active');
-  if(n==='analytics') loadAnalytics();
+function fmtINR(p){return '₹'+(p/100).toLocaleString('en-IN',{maximumFractionDigits:0});}
+function timeAgo(d){const s=Date.now()-new Date(d).getTime(),m=Math.floor(s/60000),h=Math.floor(m/60),dy=Math.floor(h/24);return dy>0?`${dy}d ago`:h>0?`${h}h ago`:m>0?`${m}m ago`:'just now';}
+function fmtDate(d){return new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function bdg(t,c){return `<span class="badge ${c}">${t}</span>`;}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function linkify(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, function(url) {
+    return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:underline;word-break:break-all;">${url}</a>`;
+  });
 }
 
+// ── Page switching ────────────────────────────────────────────────────
+function showPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='analytics') loadAnalytics();
+}
+
+// ── Analytics loading ─────────────────────────────────────────────────
 async function loadAnalytics(){
   try{
     const [sR,bR,pR,rR,aR]=await Promise.all([
-      fetch('/api/admin/analytics/summary'),fetch('/api/admin/analytics/failure-breakdown'),
-      fetch('/api/admin/analytics/recovery-proof'),fetch('/api/admin/analytics/customer-risk'),
+      fetch('/api/admin/analytics/summary'),
+      fetch('/api/admin/analytics/failure-breakdown'),
+      fetch('/api/admin/analytics/recovery-proof'),
+      fetch('/api/admin/analytics/customer-risk'),
       fetch('/api/failure-events'),
     ]);
     if(sR.ok){const{data:s}=await sR.json();
@@ -188,33 +297,115 @@ async function loadAnalytics(){
     if(bR.ok){const{data:bd}=await bR.json();const tot=bd.reduce((s,b)=>s+b.count,0);
       document.getElementById('breakdown-legend').innerHTML=bd.length===0
         ?'<div style="color:var(--text-muted);font-size:.8rem;">No data yet</div>'
-        :bd.map(b=>`<div class="donut-item"><div class="donut-dot" style="background:${CAT_COLORS[b.category]||'#6b7280'}"></div><span class="donut-item-name">${CAT_LABELS[b.category]||b.category}</span><span class="donut-item-count">${b.count}</span><span style="color:var(--text-muted);font-size:.78rem;">${tot>0?Math.round(b.count/tot*100):0}%</span></div>`).join('');
+        :bd.map(b=>`<div class="donut-item"><div class="donut-dot" style="background:${CAT_COLORS[b.category]||'#6b7280'}"></div><span style="flex:1;">${CAT_LABELS[b.category]||b.category}</span><span style="font-weight:700;">${b.count}</span><span style="color:var(--text-muted);font-size:.77rem;margin-left:.4rem;">${tot>0?Math.round(b.count/tot*100):0}%</span></div>`).join('');
     }
     if(pR.ok){const{data:proof}=await pR.json();
       document.getElementById('proof-tbody').innerHTML=proof.length===0
         ?'<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:2rem;">No confirmed recoveries yet — simulate a failure then re-purchase to see proof here.</td></tr>'
-        :proof.map(p=>`<tr><td>${bdg(CAT_LABELS[p.category]||p.category,'badge-warning')}</td><td style="font-weight:700;color:#22c55e;">${fmtINR(p.amountPaise)}</td><td>${ACT_ICONS[p.recoveryAction?.actionType]||'•'} ${(p.recoveryAction?.actionType||'—').replace(/_/g,' ')}</td><td>${p.recoveryAction?.channel?bdg(p.recoveryAction.channel,'badge-info'):'—'}</td><td><span class="proof-badge recovered">✓ Recovered</span></td><td style="font-size:.8rem;color:var(--text-muted);">${timeAgo(p.detectedAt)}<br><span style="color:#22c55e;font-size:.75rem;">⏱ ${p.hoursToRecover}h to recover</span></td><td style="max-width:180px;font-size:.78rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.agentReasoning||''}">${p.agentReasoning?p.agentReasoning.substring(0,70)+'…':'—'}</td></tr>`).join('');
+        :proof.map(p=>`<tr><td>${bdg(CAT_LABELS[p.category]||p.category,'badge-warning')}</td><td style="font-weight:700;color:#22c55e;">${fmtINR(p.amountPaise)}</td><td>${ACT_ICONS[p.recoveryAction?.actionType]||'•'} ${(p.recoveryAction?.actionType||'—').replace(/_/g,' ')}</td><td>${p.recoveryAction?.channel?bdg(p.recoveryAction.channel,'badge-info'):'—'}</td><td><span class="proof-badge">✓ Recovered</span></td><td style="font-size:.8rem;color:var(--text-muted);">${timeAgo(p.detectedAt)}<br><span style="color:#22c55e;font-size:.74rem;">⏱ ${p.hoursToRecover}h</span></td><td style="max-width:160px;font-size:.78rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.agentReasoning||''}">${p.agentReasoning?p.agentReasoning.substring(0,60)+'…':'—'}</td></tr>`).join('');
     }
     if(rR.ok){const{data:risk}=await rR.json();
       document.getElementById('risk-tbody').innerHTML=risk.length===0
         ?'<tr><td colspan="5" style="color:var(--text-muted);text-align:center;">No data yet</td></tr>'
         :risk.map(r=>`<tr><td style="font-weight:700;color:var(--text-muted);">#${r.rank}</td><td>${r.anonymizedLabel}</td><td style="font-weight:700;color:#ef4444;">${r.failureCount}</td><td style="font-weight:700;">${fmtINR(r.totalAtRiskPaise)}</td><td style="font-size:.78rem;color:var(--text-muted);">${timeAgo(r.lastFailureAt)}</td></tr>`).join('');
     }
-    if(aR.ok){const{data:evts}=await aR.json();
+    if(aR.ok){
+      const{data:evts}=await aR.json();
+      window._auditData=evts;
       document.getElementById('audit-tbody').innerHTML=evts.length===0
         ?'<tr><td colspan="7" style="color:var(--text-muted);text-align:center;padding:2rem;">No events yet</td></tr>'
-        :evts.map(e=>{const ok=e.recoveryActions?.some(a=>a.outcome==='success');const oc=ok?bdg('✓ Recovered','badge-success'):e.recoveryActions?.length?bdg('⚡ In Progress','badge-warning'):bdg('⏳ Pending','badge-neutral');return`<tr><td>${e.payment?.order?.customer?.name||'—'}</td><td style="font-size:.82rem;">${(e.payment?.order?.product?.name||'—').substring(0,26)}…</td><td style="font-weight:700;">${fmtINR(e.payment?.order?.amount||0)}</td><td>${bdg(CAT_LABELS[e.classifiedCategory]||e.classifiedCategory,'badge-warning')}</td><td>${e.recoveryActions?.length?e.recoveryActions.map(a=>`${ACT_ICONS[a.actionType]||'•'} ${a.actionType?.replace(/_/g,' ')}`).join(', '):'<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>'}</td><td>${oc}</td><td style="font-size:.78rem;color:var(--text-muted);">${timeAgo(e.detectedAt)}</td></tr>`;}).join('');
+        :evts.map((e,i)=>{
+          const latest=e.recoveryActions?.length?e.recoveryActions[e.recoveryActions.length-1]:null;
+          const latestCell=latest
+            ?`${ACT_ICONS[latest.actionType]||'•'} <span style="font-size:.82rem;text-transform:capitalize;">${latest.actionType?.replace(/_/g,' ')}</span><br><span style="font-size:.74rem;color:var(--text-muted);">${timeAgo(latest.executedAt||latest.createdAt)}</span>`
+            :'<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>';
+          const oc=e.confirmedRecovery?bdg('✓ Recovered','badge-success'):e.recoveryActions?.length?bdg('⚡ In Progress','badge-warning'):bdg('⏳ Pending','badge-neutral');
+          return`<tr class="audit-row" onclick="openDrawer(${i})">
+            <td style="font-weight:600;">${e.payment?.order?.customer?.name||'—'}</td>
+            <td style="font-size:.82rem;color:var(--text-muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.payment?.order?.product?.name||'—'}</td>
+            <td style="font-weight:700;">${fmtINR(e.payment?.order?.amount||0)}</td>
+            <td>${bdg(CAT_LABELS[e.classifiedCategory]||e.classifiedCategory,'badge-warning')}</td>
+            <td style="line-height:1.4;">${latestCell}</td>
+            <td>${oc}</td>
+            <td style="font-size:.78rem;color:var(--text-muted);white-space:nowrap;">${timeAgo(e.detectedAt)}</td>
+          </tr>`;
+        }).join('');
     }
-    document.getElementById('last-refresh').textContent='Updated: '+new Date().toLocaleTimeString('en-IN');
+    document.getElementById('last-refresh').textContent='Updated '+new Date().toLocaleTimeString('en-IN');
     lucide.createIcons();
   }catch(err){console.error('Analytics error:',err);}
 }
-
 loadAnalytics();
 setInterval(loadAnalytics,30000);
 
+// ── Drawer ────────────────────────────────────────────────────────────
+function openDrawer(idx){
+  const e=(window._auditData||[])[idx];
+  if(!e) return;
+  const order=e.payment?.order;
+  document.getElementById('drawer-title').textContent=
+    `${order?.customer?.name||'Customer'} — ${CAT_LABELS[e.classifiedCategory]||e.classifiedCategory}`;
+
+  const oc=e.confirmedRecovery
+    ?'<span style="color:#22c55e;font-weight:700;">✓ Confirmed Recovery</span>'
+    :e.recoveryActions?.length
+      ?'<span style="color:#f59e0b;font-weight:700;">⚡ In Progress</span>'
+      :'<span style="color:var(--text-muted);">⏳ Pending</span>';
+
+  const actions=(e.recoveryActions||[]).map((a,i)=>`
+    <div class="action-card">
+      <div class="action-card-header">
+        <div class="action-num">${i+1}</div>
+        <span class="action-type">${(a.actionType||'').replace(/_/g,' ')}</span>
+        ${a.channel?`<span class="badge badge-info" style="font-size:.72rem;">${a.channel}</span>`:''}
+        <span class="action-time">${a.executedAt||a.createdAt?fmtDate(a.executedAt||a.createdAt):'—'}</span>
+      </div>
+      <div style="font-size:.8rem;margin-bottom:.3rem;">
+        <span style="color:var(--text-muted);">Dispatch status:</span>
+        <strong style="color:${a.outcome==='success'?'#22c55e':'#f59e0b'}">${a.outcome||'—'}</strong>
+        <em style="font-size:.73rem;color:var(--text-muted);"> — notification sent, not a repurchase</em>
+      </div>
+      ${a.agentReasoning?`<div class="action-reasoning">💬 <em>${linkify(esc(a.agentReasoning))}</em></div>`:''}
+    </div>`).join('')||'<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0;">No recovery actions taken yet.</div>';
+
+  document.getElementById('drawer-body').innerHTML=`
+    <div class="detail-section">
+      <div class="detail-section-title">Failure Overview</div>
+      <div class="detail-kv"><span class="detail-k">Customer</span><span class="detail-v">${order?.customer?.name||'—'}</span></div>
+      <div class="detail-kv"><span class="detail-k">Product</span><span class="detail-v">${order?.product?.name||'—'}</span></div>
+      <div class="detail-kv"><span class="detail-k">Amount</span><span class="detail-v" style="color:#f59e0b;font-size:1.05rem;">${fmtINR(order?.amount||0)}</span></div>
+      <div class="detail-kv"><span class="detail-k">Category</span><span class="detail-v">${bdg(CAT_LABELS[e.classifiedCategory]||e.classifiedCategory,'badge-warning')}</span></div>
+      <div class="detail-kv"><span class="detail-k">Root Cause</span><span class="detail-v" style="font-size:.82rem;font-weight:400;color:var(--text-muted);text-align:right;">${esc(e.rootCause||'—')}</span></div>
+      <div class="detail-kv"><span class="detail-k">Detected At</span><span class="detail-v">${fmtDate(e.detectedAt)}</span></div>
+      <div class="detail-kv"><span class="detail-k">Overall Outcome</span><span class="detail-v">${oc}</span></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Recovery Actions (${(e.recoveryActions||[]).length})</div>
+      ${actions}
+    </div>
+    ${e.confirmedRecovery?`
+    <div class="detail-section">
+      <div class="detail-section-title">✓ Proof of Recovery</div>
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:.9rem 1rem;font-size:.85rem;color:#22c55e;line-height:1.5;">
+        Customer repurchased the same product after the AI intervened. Revenue recovered!
+      </div>
+    </div>`:''}
+  `;
+
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+  lucide.createIcons({root:document.getElementById('drawer')});
+}
+function closeDrawer(){
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+
 // ── Chat ──────────────────────────────────────────────────────────────
-let chatBusy=false,curSrc=null;
+let chatBusy=false,curSrc=null,chatHasMessages=false;
+
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,160)+'px';}
 function handleChatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChatMessage();}}
 function sendSuggestion(btn){document.getElementById('chat-input').value=btn.textContent.replace(/^[^\w₹]+/,'').trim();sendChatMessage();}
 
@@ -222,54 +413,93 @@ async function sendChatMessage(){
   if(chatBusy)return;
   const inp=document.getElementById('chat-input');
   const msg=inp.value.trim();if(!msg)return;
-  inp.value='';chatBusy=true;document.getElementById('chat-send').disabled=true;
-  document.getElementById('chat-suggestions').style.display='none';
-  appendMsg('user',msg);const typing=appendTyping();
+  inp.value='';autoResize(inp);
+  chatBusy=true;document.getElementById('chat-send').disabled=true;
+  if(!chatHasMessages){const w=document.getElementById('chat-welcome');if(w)w.remove();chatHasMessages=true;}
+  appendMsg('user',msg);
+  const typing=appendTyping();
   try{
     const res=await fetch('/api/admin/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
     const{sessionId}=await res.json();
     if(curSrc)curSrc.close();
     curSrc=new EventSource(`/api/admin/chat/stream/${sessionId}`);
-    let content='',bubble=null;
-    curSrc.onmessage=e=>{
-      const d=JSON.parse(e.data);
-      if(d.type==='delta'){if(!bubble){typing.remove();bubble=appendMsg('assistant','');}content+=d.content;bubble.querySelector('.msg-bubble').innerHTML=renderMd(content);scrollChat();}
-      else if(d.type==='done'){curSrc.close();chatBusy=false;document.getElementById('chat-send').disabled=false;}
-      else if(d.type==='error'){if(typing.parentNode)typing.remove();appendMsg('assistant','⚠️ '+(d.message||'Something went wrong.'));curSrc.close();chatBusy=false;document.getElementById('chat-send').disabled=false;}
+    let content='',bubble=null,cursor=null;
+    curSrc.onmessage=ev=>{
+      const d=JSON.parse(ev.data);
+      if(d.type==='delta'){
+        if(!bubble){
+          typing.remove();
+          bubble=appendMsg('assistant','');
+          cursor=document.createElement('span');
+          cursor.className='cursor-blink';
+          bubble.querySelector('.msg-bubble').appendChild(cursor);
+        }
+        content+=d.content;
+        const bub=bubble.querySelector('.msg-bubble');
+        if(cursor)cursor.remove();
+        bub.innerHTML=renderMd(content);
+        bub.appendChild(cursor);
+        scrollChat();
+      }else if(d.type==='done'){
+        if(cursor)cursor.remove();
+        if(bubble)bubble.querySelector('.msg-bubble').innerHTML=renderMd(content);
+        curSrc.close();chatBusy=false;document.getElementById('chat-send').disabled=false;scrollChat();
+      }else if(d.type==='error'){
+        if(typing.parentNode)typing.remove();
+        appendMsg('assistant','⚠️ '+(d.message||'Something went wrong.'));
+        curSrc.close();chatBusy=false;document.getElementById('chat-send').disabled=false;
+      }
     };
-    curSrc.onerror=()=>{if(typing.parentNode)typing.remove();if(!bubble)appendMsg('assistant','⚠️ Connection lost. Please try again.');curSrc.close();chatBusy=false;document.getElementById('chat-send').disabled=false;};
-  }catch(err){if(typing.parentNode)typing.remove();appendMsg('assistant','⚠️ Failed to connect to AI agent.');chatBusy=false;document.getElementById('chat-send').disabled=false;}
+    curSrc.onerror=()=>{
+      if(typing.parentNode)typing.remove();
+      if(!bubble)appendMsg('assistant','⚠️ Connection lost. Please try again.');
+      if(cursor)cursor.remove();
+      curSrc.close();chatBusy=false;document.getElementById('chat-send').disabled=false;
+    };
+  }catch(err){
+    if(typing.parentNode)typing.remove();
+    appendMsg('assistant','⚠️ Failed to connect.');
+    chatBusy=false;document.getElementById('chat-send').disabled=false;
+  }
 }
 
 function appendMsg(role,content){
-  const m=document.getElementById('chat-messages');
-  const el=document.createElement('div');el.className='chat-msg '+role;
-  el.innerHTML=`<div class="msg-avatar ${role==='user'?'user-av':'ai-av'}">${role==='user'?'You':'AI'}</div><div class="msg-bubble">${role==='user'?esc(content):renderMd(content)}</div>`;
-  m.appendChild(el);scrollChat();return el;
+  const container=document.getElementById('chat-messages');
+  const wrap=document.createElement('div');wrap.className='chat-msg-wrap';
+  const inner=document.createElement('div');inner.className='chat-msg-inner'+(role==='user'?' user':'');
+  const av=document.createElement('div');av.className='msg-avatar '+(role==='user'?'user-av':'ai-av');av.textContent=role==='user'?'You':'AI';
+  const body=document.createElement('div');body.className='msg-body';
+  if(role!=='user'){const name=document.createElement('div');name.className='msg-name';name.textContent='Merchant Intelligence Agent';body.appendChild(name);}
+  const bub=document.createElement('div');bub.className='msg-bubble';
+  bub.innerHTML=role==='user'?esc(content):renderMd(content);
+  body.appendChild(bub);inner.appendChild(av);inner.appendChild(body);wrap.appendChild(inner);
+  container.appendChild(wrap);scrollChat();return wrap;
 }
 function appendTyping(){
-  const m=document.getElementById('chat-messages');
-  const el=document.createElement('div');el.className='chat-msg assistant';
-  el.innerHTML='<div class="msg-avatar ai-av">AI</div><div class="msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>';
-  m.appendChild(el);scrollChat();return el;
+  const container=document.getElementById('chat-messages');
+  const wrap=document.createElement('div');wrap.className='chat-msg-wrap';
+  const inner=document.createElement('div');inner.className='chat-msg-inner';
+  inner.innerHTML='<div class="msg-avatar ai-av">AI</div><div class="msg-body"><div class="msg-name">Merchant Intelligence Agent</div><div class="msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div></div>';
+  wrap.appendChild(inner);container.appendChild(wrap);scrollChat();return wrap;
 }
 function scrollChat(){const m=document.getElementById('chat-messages');m.scrollTop=m.scrollHeight;}
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
 function renderMd(md){
   let h=esc(md);
   h=h.replace(/```[\w]*\n?([\s\S]*?)```/g,'<pre><code>$1</code></pre>');
   h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
-  h=h.replace(/^### (.+)$/gm,'<strong style="font-size:1rem;">$1</strong>');
-  h=h.replace(/^## (.+)$/gm,'<strong style="font-size:1.05rem;">$1</strong>');
-  h=h.replace(/^# (.+)$/gm,'<strong style="font-size:1.1rem;">$1</strong>');
+  h=h.replace(/^### (.+)$/gm,'<strong style="font-size:.95rem;display:block;margin:.6rem 0 .2rem;">$1</strong>');
+  h=h.replace(/^## (.+)$/gm,'<strong style="font-size:1rem;display:block;margin:.7rem 0 .25rem;">$1</strong>');
+  h=h.replace(/^# (.+)$/gm,'<strong style="font-size:1.05rem;display:block;margin:.8rem 0 .3rem;">$1</strong>');
   h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
   h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
-  h=h.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n)*)/g,(match,head,body)=>{
+  h=h.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/g,(match,head,body)=>{
     const th=head.split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
-    const tb=body.trim().split('\n').map(r=>'<tr>'+r.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('')+'</tr>').join('');
+    const tb=body.trim().split('\n').filter(r=>r.trim()).map(r=>'<tr>'+r.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('')+'</tr>').join('');
     return`<table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table>`;
   });
-  h=h.replace(/^[-•] (.+)$/gm,'<li style="margin-left:1rem;">$1</li>');
+  h=h.replace(/^[-•] (.+)$/gm,'<li style="margin:.2rem 0 .2rem 1.2rem;">$1</li>');
+  h=h.replace(/^> (.+)$/gm,'<blockquote style="border-left:3px solid var(--accent);padding:.3rem .8rem;margin:.4rem 0;color:var(--text-muted);font-size:.86rem;">$1</blockquote>');
   h=h.replace(/\n\n/g,'<br><br>');h=h.replace(/\n/g,'<br>');
   return h;
 }
@@ -277,4 +507,3 @@ lucide.createIcons();
 </script>
 </body>
 </html>
-

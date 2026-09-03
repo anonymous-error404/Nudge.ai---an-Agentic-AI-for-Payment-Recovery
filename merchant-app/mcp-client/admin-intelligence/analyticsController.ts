@@ -48,10 +48,8 @@ class AnalyticsController {
 
         const repurchase = await prisma.order.findFirst({
           where: {
-            customerId: order.customer.id,
-            productId: order.product.id,
+            id: order.id,
             status: "paid",
-            createdAt: { gt: e.detectedAt },
           },
           orderBy: { createdAt: "asc" },
         });
@@ -60,7 +58,7 @@ class AnalyticsController {
           recoveredCount++;
           totalRecoveredPaise += repurchase.amount;
           hoursArr.push(
-            (repurchase.createdAt.getTime() - e.detectedAt.getTime()) / 3600000
+            (repurchase.updatedAt.getTime() - e.detectedAt.getTime()) / 3600000
           );
         }
       }
@@ -160,14 +158,10 @@ class AnalyticsController {
         const productId = failedOrder.product?.id;
         if (!customerId || !productId) continue;
 
-        // Look for a PAID order from the same customer for the same product
-        // that was created AFTER the failure was detected
         const repurchase = await prisma.order.findFirst({
           where: {
-            customerId,
-            productId,
+            id: failedOrder.id,
             status: "paid",
-            createdAt: { gt: e.detectedAt },
           },
           orderBy: { createdAt: "asc" },
         });
@@ -185,9 +179,9 @@ class AnalyticsController {
           category: e.classifiedCategory,
           // Amount from the REPURCHASE (actual money recovered)
           amountPaise: repurchase.amount,
-          repurchasedAt: repurchase.createdAt.toISOString(),
+          repurchasedAt: repurchase.updatedAt.toISOString(),
           hoursToRecover: parseFloat(
-            ((repurchase.createdAt.getTime() - e.detectedAt.getTime()) / 3600000).toFixed(1)
+            ((repurchase.updatedAt.getTime() - e.detectedAt.getTime()) / 3600000).toFixed(1)
           ),
           recoveryAction: action
             ? {
@@ -212,19 +206,45 @@ class AnalyticsController {
       const events = await prisma.failureEvent.findMany({
         include: {
           recoveryActions: true,
-          payment: { include: { order: { include: { customer: { select: { id: true } } } } } },
+          payment: {
+            include: {
+              order: {
+                include: {
+                  customer: { select: { id: true } },
+                  product: { select: { id: true } },
+                },
+              },
+            },
+          },
         },
       });
+
       const byCustomer: Record<string, { failureCount: number; atRiskPaise: number; lastFailureAt: Date }> = {};
+
       for (const e of events) {
         const cid = e.payment?.order?.customer?.id;
+        const pid = e.payment?.order?.product?.id;
         if (!cid) continue;
-        const isRecovered = e.recoveryActions.some((a) => a.outcome === "success");
+
         if (!byCustomer[cid]) byCustomer[cid] = { failureCount: 0, atRiskPaise: 0, lastFailureAt: e.detectedAt };
         byCustomer[cid].failureCount++;
-        if (!isRecovered) byCustomer[cid].atRiskPaise += e.payment?.order?.amount ?? 0;
         if (e.detectedAt > byCustomer[cid].lastFailureAt) byCustomer[cid].lastFailureAt = e.detectedAt;
+
+        // Only add to at-risk if the customer has NOT repurchased this product after failure
+        let isConfirmedRecovery = false;
+        if (pid && e.recoveryActions.length > 0) {
+          const repurchase = await prisma.order.findFirst({
+            where: {
+              id: e.payment?.order?.id,
+              status: "paid",
+            },
+            select: { id: true },
+          });
+          isConfirmedRecovery = !!repurchase;
+        }
+        if (!isConfirmedRecovery) byCustomer[cid].atRiskPaise += e.payment?.order?.amount ?? 0;
       }
+
       const data = Object.values(byCustomer)
         .sort((a, b) => b.failureCount - a.failureCount)
         .slice(0, 20)

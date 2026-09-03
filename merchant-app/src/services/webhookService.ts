@@ -6,15 +6,16 @@ import { failureClassifierService } from "./failureClassifierService";
 import { handlePaymentFailure } from "../../mcp-client/recovery-intelligence/recoveryOrchestrator";
 
 class WebhookService {
-  async processEvent(event: RazorpayWebhookEvent) {
+  async processEvent(
+    event: RazorpayWebhookEvent,
+  ): Promise<{ uiMessage?: string }> {
     const eventType = event.event;
     console.log(`📨 Webhook received: ${eventType}`);
 
     try {
       switch (eventType) {
         case "payment.failed":
-          await this.handlePaymentFailed(event);
-          break;
+          return await this.handlePaymentFailed(event);
         case "payment.authorized":
           await this.handlePaymentAuthorized(event);
           break;
@@ -30,11 +31,14 @@ class WebhookService {
     } catch (err) {
       console.error(`❌ Error processing webhook event ${eventType}:`, err);
     }
+    return {};
   }
 
-  private async handlePaymentFailed(event: RazorpayWebhookEvent) {
+  private async handlePaymentFailed(
+    event: RazorpayWebhookEvent,
+  ): Promise<{ uiMessage?: string }> {
     const payload = event.payload.payment?.entity;
-    if (!payload) return;
+    if (!payload) return {};
 
     const razorpayOrderId = payload.order_id;
     const order = razorpayOrderId
@@ -45,7 +49,7 @@ class WebhookService {
       console.warn(
         `⚠️  No local order found for razorpay_order_id: ${razorpayOrderId}`,
       );
-      return;
+      return {};
     }
 
     if (razorpayOrderId) {
@@ -81,14 +85,21 @@ class WebhookService {
       });
 
     if (isNew && failureEvent) {
-      await handlePaymentFailure(failureEvent.id, category, payment.id);
+      // Await the orchestrator — its uiMessage travels back through the webhook response
+      const decision = await handlePaymentFailure(
+        failureEvent.id,
+        category,
+        payment.id,
+      );
       console.log(
         `💥 Webhook: payment failed + orchestrator invoked: payment=${payload.id} | category=${category} | order=${order.id}`,
       );
+      return { uiMessage: decision.uiMessage };
     } else {
       console.log(
-        `💥 Webhook: payment failed (duplicate webhook or already handled by frontend): payment=${payload.id} | category=${category}`,
+        `💥 Webhook: payment failed (duplicate — already handled): payment=${payload.id} | category=${category}`,
       );
+      return {};
     }
   }
 

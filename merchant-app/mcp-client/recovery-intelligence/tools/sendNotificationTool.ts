@@ -88,8 +88,7 @@ export async function executeSendNotification(args: {
 
   let successMsg = `Notification sent via ${args.channel} (mock)`;
 
-  if (args.channel === "email" || args.channel === "sms" || args.channel === "whatsapp") {
-    // We dropped SMS/whatsapp since no free no-auth API exists. Force everything through Ethereal email testing.
+  if (args.channel === "email") {
     console.log(`\n📬 Sending REAL test email via Nodemailer (Ethereal) to ${customer.email}...`);
     const subject = args.subject || "Payment Failed - Action Required";
     const result = await emailService.sendEmail(customer.email, subject, htmlBody);
@@ -99,6 +98,12 @@ export async function executeSendNotification(args: {
     } else {
       successMsg = `Failed to send email: ${result.error}`;
     }
+  } else if (args.channel === "sms" || args.channel === "whatsapp") {
+    console.log(`\n📱 Sending MOCK ${args.channel.toUpperCase()} to ${customer.name}:`);
+    console.log(`--------------------------------------------------------`);
+    console.log(body);
+    console.log(`--------------------------------------------------------`);
+    successMsg = `Mock ${args.channel.toUpperCase()} logged to console successfully.`;
   }
 
   return {

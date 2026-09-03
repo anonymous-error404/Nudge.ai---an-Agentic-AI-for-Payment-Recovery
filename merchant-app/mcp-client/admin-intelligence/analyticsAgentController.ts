@@ -56,27 +56,32 @@ class AnalyticsAgentController {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Send a heartbeat immediately so the browser knows the connection is open
     res.write(": heartbeat\n\n");
 
     let attempts = 0;
-    const MAX_WAIT_MS = 120000; // 2 minutes
-    const POLL_MS = 800;
+    const MAX_WAIT_MS = 120000;
+    const POLL_MS = 600;
     const maxAttempts = Math.floor(MAX_WAIT_MS / POLL_MS);
+    let streaming = false;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
+      if (streaming) return; // don't re-enter while streaming
       attempts++;
       const content = pendingResponses.get(sessionId);
 
       if (content !== null && content !== undefined) {
-        // Response is ready — stream it in chunks of ~80 chars for a "streaming" feel
-        const chunkSize = 80;
-        for (let i = 0; i < content.length; i += chunkSize) {
-          const chunk = content.slice(i, i + chunkSize);
-          res.write(`data: ${JSON.stringify({ type: "delta", content: chunk })}\n\n`);
-        }
-        res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+        streaming = true;
         clearInterval(interval);
+
+        // Stream character by character with a small delay — real typewriter feel
+        const CHAR_DELAY_MS = 8;
+        for (let i = 0; i < content.length; i++) {
+          if (req.destroyed) break; // client disconnected
+          res.write(`data: ${JSON.stringify({ type: "delta", content: content[i] })}\n\n`);
+          await new Promise((r) => setTimeout(r, CHAR_DELAY_MS));
+        }
+
+        res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
         pendingResponses.delete(sessionId);
         res.end();
         return;

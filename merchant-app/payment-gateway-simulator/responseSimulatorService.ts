@@ -2,9 +2,6 @@ import { prisma } from "../src/lib/prismaClient";
 import { FailureCategory } from "../src/enums";
 import type { FailureScenario } from "../src/types";
 import { orderRepository } from "../src/repositories/orderRepository";
-import { paymentRepository } from "../src/repositories/paymentRepository";
-import { failureEventRepository } from "../src/repositories/failureEventRepository";
-import { failureClassifierService } from "../src/services/failureClassifierService";
 import crypto from "crypto";
 
 export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
@@ -205,65 +202,83 @@ class ResponseSimulatorService {
       };
     }
 
-        // ─── FAILURE PATH ────────────────────────────────────────────────────────
+    // ─── FAILURE PATH ────────────────────────────────────────────────────────
     if (!scenarioKey || !FAILURE_SCENARIOS[scenarioKey]) {
       throw new Error(
         `scenarioKey is required for outcome=fail. Valid: ${Object.keys(FAILURE_SCENARIOS).join(", ")}`,
       );
     }
     const scenario = FAILURE_SCENARIOS[scenarioKey];
-    const fakeRazorpayPaymentId = "pay_ck_fail_${scenarioKey}_${Date.now()}";
+    const fakeRazorpayPaymentId = `pay_ck_fail_${scenarioKey}_${Date.now()}`;
 
-    // Fire the signed webhook self-POST
-    // The webhook handler (webhookService.ts) owns the full DB write + classification
-    // + AI orchestration pipeline. We let it handle everything to avoid race conditions.
+    // Build and sign the simulated Razorpay webhook payload
     const webhookSecret = process.env.WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const webhookPayload = {
-        entity: "event",
-        account_id: "acc_test_simulator",
-        event: "payment.failed",
-        contains: ["payment"],
-        payload: {
-          payment: {
-            entity: {
-              id: fakeRazorpayPaymentId,
-              entity: "payment",
-              amount: totalAmount,
-              currency: "INR",
-              status: "failed",
-              order_id: fakeRazorpayOrderId,
-              method: scenario.method,
-              error_code: scenario.errorCode,
-              error_description: scenario.errorDescription,
-              error_source: scenario.errorSource,
-              error_step: scenario.errorStep,
-              error_reason: scenario.errorReason,
-            },
+    if (!webhookSecret) {
+      throw new Error(
+        "WEBHOOK_SECRET is not configured — cannot fire simulated webhook",
+      );
+    }
+
+    const webhookPayload = {
+      entity: "event",
+      account_id: "acc_test_simulator",
+      event: "payment.failed",
+      contains: ["payment"],
+      payload: {
+        payment: {
+          entity: {
+            id: fakeRazorpayPaymentId,
+            entity: "payment",
+            amount: totalAmount,
+            currency: "INR",
+            status: "failed",
+            order_id: fakeRazorpayOrderId,
+            method: scenario.method,
+            error_code: scenario.errorCode,
+            error_description: scenario.errorDescription,
+            error_source: scenario.errorSource,
+            error_step: scenario.errorStep,
+            error_reason: scenario.errorReason,
           },
         },
-        created_at: Math.floor(Date.now() / 1000),
-      };
-      const rawBody = JSON.stringify(webhookPayload);
-      const signature = crypto
-        .createHmac("sha256", webhookSecret)
-        .update(rawBody)
-        .digest("hex");
-      const port = process.env.PORT ?? 3000;
-      fetch("http://localhost:${port}/webhook/razorpay", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-razorpay-signature": signature,
+      },
+      created_at: Math.floor(Date.now() / 1000),
+    };
+
+    const rawBody = JSON.stringify(webhookPayload);
+    const signature = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(rawBody)
+      .digest("hex");
+    const port = process.env.PORT ?? 3000;
+
+    // AWAIT the self-POST so we can read the uiMessage the orchestrator produced
+    let uiMessage: string | undefined;
+    try {
+      const webhookRes = await fetch(
+        `http://localhost:${port}/webhook/razorpay`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-razorpay-signature": signature,
+          },
+          body: rawBody,
         },
-        body: rawBody,
-      }).catch((e) =>
-        console.warn("Simulated failure webhook self-POST skipped:", e.message),
+      );
+      if (webhookRes.ok) {
+        const webhookData = (await webhookRes.json()) as any;
+        uiMessage = webhookData.uiMessage;
+      }
+    } catch (e) {
+      console.warn(
+        "⚠️  Simulated failure webhook self-POST failed:",
+        (e as Error).message,
       );
     }
 
     console.log(
-      "❌ [Simulated Checkout] FAILURE | order=${order.id} | payment=${fakeRazorpayPaymentId} | webhook_fired",
+      `❌ [Simulated Checkout] FAILURE | order=${order.id} | payment=${fakeRazorpayPaymentId}`,
     );
 
     return {
@@ -281,6 +296,8 @@ class ResponseSimulatorService {
         errorStep: scenario.errorStep,
         errorDescription: scenario.errorDescription,
       },
+      // Carry the AI's decision back to the frontend UI
+      recoveryDecision: uiMessage ? { uiMessage } : undefined,
     };
   }
 }

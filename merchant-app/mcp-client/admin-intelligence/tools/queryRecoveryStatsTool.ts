@@ -23,39 +23,82 @@ export async function executeQueryRecoveryStats(args: { days?: number }) {
     where: { detectedAt: { gte: since } },
     include: {
       recoveryActions: true,
-      payment: { include: { order: true } },
+      payment: {
+        include: {
+          order: {
+            include: {
+              customer: { select: { id: true } },
+              product: { select: { id: true } },
+            },
+          },
+        },
+      },
     },
   });
 
   const total = events.length;
-  const recovered = events.filter((e) => e.recoveryActions.some((a) => a.outcome === "success"));
-  const atRisk = events.filter((e) => !e.recoveryActions.some((a) => a.outcome === "success"));
-
-  const totalRecoveredPaise = recovered.reduce((s, e) => s + (e.payment?.order?.amount ?? 0), 0);
-  const totalAtRiskPaise = atRisk.reduce((s, e) => s + (e.payment?.order?.amount ?? 0), 0);
-
+  let recoveredCount = 0;
+  let totalRecoveredPaise = 0;
   const hoursToRecover: number[] = [];
-  for (const e of recovered) {
-    const successAction = e.recoveryActions.find((a) => a.outcome === "success");
-    if (successAction) {
-      const hrs = (successAction.executedAt.getTime() - e.detectedAt.getTime()) / 3600000;
-      hoursToRecover.push(hrs);
+
+  // Real recovery = same customer later placed a PAID order for the same product
+  // AFTER the failure was detected. Actions dispatched ≠ money recovered.
+  for (const e of events) {
+    const order = e.payment?.order;
+    if (!order?.customer?.id || !order?.product?.id) continue;
+    if (e.recoveryActions.length === 0) continue;
+
+    const repurchase = await prisma.order.findFirst({
+      where: {
+        id: order.id,
+        status: "paid",
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (repurchase) {
+      recoveredCount++;
+      totalRecoveredPaise += repurchase.amount;
+      hoursToRecover.push(
+        (repurchase.updatedAt.getTime() - e.detectedAt.getTime()) / 3600000,
+      );
     }
   }
-  const avgHoursToRecover = hoursToRecover.length > 0
-    ? hoursToRecover.reduce((a, b) => a + b, 0) / hoursToRecover.length
-    : 0;
+
+  // In-progress: actions taken but no confirmed repurchase yet
+  const inProgressCount = events.filter(
+    (e) => e.recoveryActions.length > 0,
+  ).length - recoveredCount;
+
+  // At-risk: failure events where the money is still outstanding
+  const totalAtRiskPaise = events.reduce(
+    (s, e) => s + (e.payment?.order?.amount ?? 0),
+    0,
+  ) - totalRecoveredPaise;
+
+  const avgHoursToRecover =
+    hoursToRecover.length > 0
+      ? hoursToRecover.reduce((a, b) => a + b, 0) / hoursToRecover.length
+      : 0;
 
   return {
     periodDays: days,
     totalEvents: total,
-    recoveredCount: recovered.length,
-    atRiskCount: atRisk.length,
+    recoveredCount,
+    inProgressCount: Math.max(0, inProgressCount),
+    atRiskCount: total - recoveredCount,
     totalRecoveredPaise,
     totalRecoveredRupees: Math.round(totalRecoveredPaise / 100),
-    totalAtRiskPaise,
-    totalAtRiskRupees: Math.round(totalAtRiskPaise / 100),
-    recoveryRatePct: total > 0 ? parseFloat(((recovered.length / total) * 100).toFixed(1)) : 0,
+    totalAtRiskPaise: Math.max(0, totalAtRiskPaise),
+    totalAtRiskRupees: Math.round(Math.max(0, totalAtRiskPaise) / 100),
+    recoveryRatePct:
+      total > 0
+        ? parseFloat(((recoveredCount / total) * 100).toFixed(1))
+        : 0,
     avgHoursToRecover: parseFloat(avgHoursToRecover.toFixed(1)),
+    dataNote:
+      "Recovered = the failed order was successfully paid after a retry. " +
+      "In Progress = AI sent a recovery action but customer has not yet paid.",
   };
 }
+
