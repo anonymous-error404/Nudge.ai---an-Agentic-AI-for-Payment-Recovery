@@ -8,3 +8,4 @@ router.get("/api/jobs/:jobId/status", recoveryJobsController.getJobStatus.bind(r
 router.get("/api/audit", recoveryJobsController.getAudit.bind(recoveryJobsController));
 
 export default router;
+

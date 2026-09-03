@@ -7,8 +7,8 @@
  * click straight back into their failed order.
  */
 
-import { prisma } from "../lib/prismaClient";
-import { emailService } from "../services/emailService";
+import { prisma } from "../../../src/lib/prismaClient";
+import { emailService } from "../../../src/services/emailService";
 
 export const sendNotificationSchema = {
   type: "function" as const,
@@ -108,4 +108,7 @@ export async function executeSendNotification(args: {
     retryUrl,
   };
 }
+
+
+
 

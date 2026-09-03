@@ -10,10 +10,10 @@
  * to our /mcp/tool-call callback endpoint, which executes them locally.
  */
 
-import { FailureCategory } from "../enums";
-import { failureEventRepository } from "../repositories/failureEventRepository";
-import { orderRepository } from "../repositories/orderRepository";
-import { TOOL_SCHEMAS } from "../tools";
+import { FailureCategory } from "../../src/enums";
+import { failureEventRepository } from "../../src/repositories/failureEventRepository";
+import { orderRepository } from "../../src/repositories/orderRepository";
+import { TOOL_SCHEMAS } from "./tools";
 
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL ?? "http://localhost:3001";
 const MERCHANT_ID = process.env.MERCHANT_ID ?? "merchant_demo_001";
@@ -66,7 +66,7 @@ async function buildFailureContext(
     days_since_failure: daysSinceFailure,
     payment_method: event.payment?.method ?? "unknown",
     previous_actions: previousActions.map(
-      (a) => `${a.actionType}:${a.outcome}`,
+      (a: any) => `${a.actionType}:${a.outcome}`,
     ),
     order_details: order
       ? {

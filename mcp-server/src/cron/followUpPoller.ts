@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prismaClient";
-import { recoveryQueue } from "../queue/recoveryQueue";
+import { recoveryQueue } from "../queue/jobQueue";
 import { FailureContext } from "../types";
 
 export function startFollowUpPoller() {
@@ -62,3 +62,4 @@ export function startFollowUpPoller() {
     }
   }, POLL_INTERVAL);
 }
+

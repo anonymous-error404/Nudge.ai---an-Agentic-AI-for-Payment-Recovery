@@ -21,3 +21,4 @@ class ToolResultsController {
 }
 
 export const toolResultsController = new ToolResultsController();
+

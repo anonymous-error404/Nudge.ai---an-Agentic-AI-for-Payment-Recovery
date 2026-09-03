@@ -56,3 +56,4 @@ export class FailureEventRepository {
 }
 
 export const failureEventRepo = new FailureEventRepository();
+

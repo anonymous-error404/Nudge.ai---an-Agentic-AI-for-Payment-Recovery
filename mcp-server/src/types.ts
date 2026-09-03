@@ -77,3 +77,4 @@ export interface JobCompleteMessage {
   agentReasoning: string | null;
   notificationContent?: string | null;
 }
+

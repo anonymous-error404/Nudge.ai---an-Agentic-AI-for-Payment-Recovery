@@ -129,3 +129,4 @@ function getFallbackContent(failureCategory: string, channel: NotificationChanne
   const template = categoryTemplates[channel];
   return { ...template, channel };
 }
+

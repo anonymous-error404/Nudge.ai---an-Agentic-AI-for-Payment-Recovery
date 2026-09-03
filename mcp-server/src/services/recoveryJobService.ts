@@ -1,4 +1,4 @@
-import { recoveryQueue } from "../queue/recoveryQueue";
+import { recoveryQueue } from "../queue/jobQueue";
 import { failureEventRepo } from "../repositories/failureEventRepo";
 import { recoveryActionRepo } from "../repositories/recoveryActionRepo";
 import { prisma } from "../lib/prismaClient";
@@ -89,3 +89,4 @@ class RecoveryJobService {
 }
 
 export const recoveryJobService = new RecoveryJobService();
+

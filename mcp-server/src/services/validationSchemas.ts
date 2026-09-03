@@ -48,3 +48,4 @@ export const ToolResultSchema = z.object({
 
 export type RecoveryJobInput = z.infer<typeof RecoveryJobSchema>;
 export type ToolResultInput = z.infer<typeof ToolResultSchema>;
+

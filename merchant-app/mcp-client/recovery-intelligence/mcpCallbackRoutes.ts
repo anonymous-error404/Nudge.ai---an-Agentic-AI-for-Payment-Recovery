@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { mcpCallbackController } from "../controllers/mcpCallbackController";
+import { mcpCallbackController } from "./mcpCallbackController";
 
 const router = Router();
 
@@ -21,7 +21,7 @@ router.post(
   mcpCallbackController.handleJobComplete.bind(mcpCallbackController),
 );
 
-import { TOOL_SCHEMAS } from "../tools";
+import { TOOL_SCHEMAS } from "./tools";
 
 /**
  * GET /mcp/tools

@@ -3,7 +3,7 @@ import { orderRepository } from "../repositories/orderRepository";
 import { paymentRepository } from "../repositories/paymentRepository";
 import { failureEventRepository } from "../repositories/failureEventRepository";
 import { failureClassifierService } from "./failureClassifierService";
-import { handlePaymentFailure } from "./recoveryOrchestrator";
+import { handlePaymentFailure } from "../../mcp-client/recovery-intelligence/recoveryOrchestrator";
 
 class WebhookService {
   async processEvent(event: RazorpayWebhookEvent) {

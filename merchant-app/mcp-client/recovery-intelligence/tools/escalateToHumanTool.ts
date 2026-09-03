@@ -2,7 +2,7 @@
  * escalate_to_human tool
  * Flags a failure event for manual merchant review.
  */
-import { prisma } from "../lib/prismaClient";
+import { prisma } from "../../../src/lib/prismaClient";
 
 export const escalateToHumanSchema = {
   type: "function" as const,
@@ -47,3 +47,6 @@ export async function executeEscalateToHuman(args: {
     message: `Escalated to human review: ${args.reason}`,
   };
 }
+
+
+

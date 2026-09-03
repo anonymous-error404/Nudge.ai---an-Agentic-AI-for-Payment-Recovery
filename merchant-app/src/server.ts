@@ -4,8 +4,10 @@ import path from "path";
 import shopRouter from "./routes/shopRoutes";
 import checkoutRouter from "./routes/checkoutRoutes";
 import webhookRouter from "./routes/webhookRoutes";
-import mcpCallbackRouter from "./routes/mcpCallbackRoutes";
+import mcpCallbackRouter from "../mcp-client/recovery-intelligence/mcpCallbackRoutes";
 import authRouter from "./routes/authRoutes";
+import responseSimulatorRoute from "../payment-gateway-simulator/responseSimulatorRoute";
+import analyticsAgentRouter from "../mcp-client/admin-intelligence/analyticsAgentRoutes";
 import session from "express-session";
 
 const app = express();
@@ -20,7 +22,7 @@ app.use(
   (req: Request, _res: Response, next: NextFunction) => {
     (req as Request & { rawBody?: Buffer }).rawBody = req.body as Buffer;
     next();
-  }
+  },
 );
 
 // ─── Standard body parsing for all other routes ──────────────────────────────
@@ -34,7 +36,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 24 * 60 * 60 * 1000 }, // 1 day
-  })
+  }),
 );
 
 // ─── Static files ─────────────────────────────────────────────────────────────
@@ -42,10 +44,12 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use(authRouter);
-app.use(webhookRouter);        // /webhook/razorpay
-app.use(shopRouter);           // /api/products, /api/orders, /api/failure-events, /api/customers
-app.use(checkoutRouter);       // /api/checkout, /api/payment/*
-app.use(mcpCallbackRouter);    // /mcp/tool-call, /mcp/job-complete
+app.use(webhookRouter); // /webhook/razorpay
+app.use(shopRouter); // /api/products, /api/orders, /api/failure-events, /api/customers
+app.use(checkoutRouter); // /api/checkout, /api/payment/*
+app.use(responseSimulatorRoute); // /api/checkout/simulate, /api/dev/failure-scenarios
+app.use(mcpCallbackRouter); // /mcp/tool-call, /mcp/job-complete
+app.use(analyticsAgentRouter); // /api/admin/analytics/*, /api/admin/chat, /api/admin/analytics-tool-call
 
 // ─── SPA fallback for HTML pages ─────────────────────────────────────────────
 app.get("/login", (_req, res) => {

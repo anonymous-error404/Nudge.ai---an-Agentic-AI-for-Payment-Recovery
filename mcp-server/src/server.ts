@@ -3,7 +3,9 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import recoveryJobsRouter from "./routes/recoveryJobsRoutes";
 import toolResultsRouter from "./routes/toolResultsRoutes";
+import analyticsSubmitRouter from "./routes/analyticsSubmitRoute";
 import { startRecoveryWorker } from "./queue/recoveryWorker";
+import { startAnalyticsWorker } from "./queue/analyticsWorker";
 import { startFollowUpPoller } from "./cron/followUpPoller";
 
 const app = express();
@@ -17,6 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use(recoveryJobsRouter);
 app.use(toolResultsRouter);
+app.use(analyticsSubmitRouter); // POST /analytics/submit
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
@@ -43,6 +46,8 @@ app.listen(PORT, () => {
 
 // ─── Start BullMQ Worker & Poller ──────────────────────────────────────────────
 startRecoveryWorker();
+startAnalyticsWorker();
 startFollowUpPoller();
 
 export default app;
+

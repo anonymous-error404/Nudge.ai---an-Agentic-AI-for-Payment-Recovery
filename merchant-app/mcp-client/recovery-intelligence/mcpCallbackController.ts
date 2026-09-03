@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { executeTool } from "../tools";
-import { failureEventRepository } from "../repositories/failureEventRepository";
-import { RecoveryOutcome, RecoveryActionType } from "../enums";
+import { executeTool, TOOL_SCHEMAS } from "./tools";
+import { failureEventRepository } from "../../src/repositories/failureEventRepository";
+import { RecoveryOutcome, RecoveryActionType } from "../../src/enums";
 
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL ?? "http://localhost:3001";
 
@@ -28,24 +28,44 @@ class McpCallbackController {
     try {
       const result = await executeTool(tool, args);
 
-      // Log the recovery action in the merchant DB (except context gathering)
+      // Log the recovery action in the merchant DB (except context/internal tools)
       if (
         failureEventId &&
         tool !== "query_failure_context" &&
         tool !== "draft_notification_copy"
       ) {
-        await import("../lib/prismaClient")
-          .then(({ prisma }) =>
-            prisma.recoveryAction.create({
+        await import("../../src/lib/prismaClient")
+          .then(async ({ prisma }) => {
+            // Verify the failure event still exists before writing (guards against stale follow-up jobs)
+            const eventExists = await prisma.failureEvent.findUnique({
+              where: { id: failureEventId },
+              select: { id: true },
+            });
+            if (!eventExists) {
+              console.warn(
+                `⚠️  Skipping RecoveryAction log — FailureEvent ${failureEventId} not found in DB (stale job?)`
+              );
+              return;
+            }
+
+            // Determine outcome: check common success indicators across all tool result shapes
+            const isSuccess =
+              result.success !== false &&
+              result.error == null &&
+              result.sent !== false;
+
+            return prisma.recoveryAction.create({
               data: {
                 failureEventId,
                 actionType: tool,
                 channel: args.channel ? String(args.channel) : null,
-                outcome: result.success === false ? "failed" : "success",
-                agentReasoning: result.message ? String(result.message) : null,
+                outcome: isSuccess ? "success" : "failed",
+                agentReasoning: (result as any).message
+                  ? String((result as any).message)
+                  : null,
               },
-            }),
-          )
+            });
+          })
           .catch((e) =>
             console.warn("Failed to log recovery action in merchant DB:", e),
           );

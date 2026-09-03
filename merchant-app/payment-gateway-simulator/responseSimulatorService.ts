@@ -1,10 +1,10 @@
-import { prisma } from "../lib/prismaClient";
-import { FailureCategory } from "../enums";
-import type { FailureScenario } from "../types";
-import { orderRepository } from "../repositories/orderRepository";
-import { paymentRepository } from "../repositories/paymentRepository";
-import { failureEventRepository } from "../repositories/failureEventRepository";
-import { failureClassifierService } from "./failureClassifierService";
+import { prisma } from "../src/lib/prismaClient";
+import { FailureCategory } from "../src/enums";
+import type { FailureScenario } from "../src/types";
+import { orderRepository } from "../src/repositories/orderRepository";
+import { paymentRepository } from "../src/repositories/paymentRepository";
+import { failureEventRepository } from "../src/repositories/failureEventRepository";
+import { failureClassifierService } from "../src/services/failureClassifierService";
 import crypto from "crypto";
 
 export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
@@ -77,7 +77,7 @@ export const FAILURE_SCENARIOS: Record<string, FailureScenario> = {
   },
 };
 
-class CheckoutSimulatorService {
+class ResponseSimulatorService {
   getScenarios() {
     return Object.entries(FAILURE_SCENARIOS).map(([key, s]) => ({
       key,
@@ -89,7 +89,7 @@ class CheckoutSimulatorService {
     }));
   }
 
-  async simulateCheckout(params: {
+  async simulateGatewayResponse(params: {
     productId: string;
     customerId: string;
     outcome: "success" | "fail";
@@ -205,55 +205,18 @@ class CheckoutSimulatorService {
       };
     }
 
-    // ─── FAILURE PATH ────────────────────────────────────────────────────────
+        // ─── FAILURE PATH ────────────────────────────────────────────────────────
     if (!scenarioKey || !FAILURE_SCENARIOS[scenarioKey]) {
       throw new Error(
         `scenarioKey is required for outcome=fail. Valid: ${Object.keys(FAILURE_SCENARIOS).join(", ")}`,
       );
     }
     const scenario = FAILURE_SCENARIOS[scenarioKey];
-    const fakeRazorpayPaymentId = `pay_ck_fail_${scenarioKey}_${Date.now()}`;
+    const fakeRazorpayPaymentId = "pay_ck_fail_${scenarioKey}_${Date.now()}";
 
-    // 1. Upsert failed payment into our DB
-    const payment = await paymentRepository.upsertPayment({
-      orderId: order.id,
-      razorpayPaymentId: fakeRazorpayPaymentId,
-      status: "failed",
-      method: scenario.method,
-      errorCode: scenario.errorCode,
-      errorReason: scenario.errorReason,
-      errorSource: scenario.errorSource,
-      errorStep: scenario.errorStep,
-      errorDescription: scenario.errorDescription,
-    });
-
-    // 2. Mark order as failed
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { status: "failed" },
-    });
-
-    // 3. Classify the failure
-    const { category, rootCause } = failureClassifierService.classify({
-      errorCode: scenario.errorCode,
-      errorReason: scenario.errorReason,
-      errorSource: scenario.errorSource,
-      errorStep: scenario.errorStep,
-      errorDescription: scenario.errorDescription,
-    });
-
-    // 4. Create failure event (idempotent)
-    const { event: failureEvent, isNew } =
-      await failureEventRepository.createIdempotent({
-        orderId: order.id,
-        paymentId: payment.id,
-        category,
-        rootCause,
-      });
-
-    // 5. Fire the signed webhook self-POST — the webhook handler owns the full
-    //    classify → failure_event → orchestrator → AI recovery pipeline.
-    //    We MUST NOT call handlePaymentFailure directly here to avoid double-execution.
+    // Fire the signed webhook self-POST
+    // The webhook handler (webhookService.ts) owns the full DB write + classification
+    // + AI orchestration pipeline. We let it handle everything to avoid race conditions.
     const webhookSecret = process.env.WEBHOOK_SECRET;
     if (webhookSecret) {
       const webhookPayload = {
@@ -287,7 +250,7 @@ class CheckoutSimulatorService {
         .update(rawBody)
         .digest("hex");
       const port = process.env.PORT ?? 3000;
-      fetch(`http://localhost:${port}/webhook/razorpay`, {
+      fetch("http://localhost:${port}/webhook/razorpay", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -295,52 +258,31 @@ class CheckoutSimulatorService {
         },
         body: rawBody,
       }).catch((e) =>
-        console.warn("Simulated webhook self-POST skipped:", e.message),
+        console.warn("Simulated failure webhook self-POST skipped:", e.message),
       );
     }
 
-    // 6. Fetch full failure event for response (recovery decision logged async by webhook)
-    const failureEventFull = failureEvent
-      ? await failureEventRepository.getById(failureEvent.id)
-      : null;
-
     console.log(
-      `🧪 [Simulated Checkout] FAIL | scenario=${scenarioKey} | order=${order.id} | payment=${fakeRazorpayPaymentId} | category=${category} | recovery=webhook_triggered`,
+      "❌ [Simulated Checkout] FAILURE | order=${order.id} | payment=${fakeRazorpayPaymentId} | webhook_fired",
     );
 
     return {
       outcome: "fail" as const,
-      scenario: {
-        key: scenarioKey,
-        label: scenario.label,
-        expectedCategory: scenario.expectedCategory,
-        expectedRecovery: scenario.expectedRecovery,
-      },
-      category,
-      rootCause,
       order: {
         id: order.id,
         razorpayOrderId: fakeRazorpayOrderId,
-        retryToken: order.retryToken,
         amount: totalAmount,
       },
-      payment: { id: fakeRazorpayPaymentId, method: scenario.method },
-      recoveryDecision: null, // AI runs async via webhook; check /api/orders or Prisma Studio
-      failureEvent: failureEventFull
-        ? {
-            id: failureEventFull.id,
-            classifiedCategory: failureEventFull.classifiedCategory,
-            recoveryActions: failureEventFull.recoveryActions.map((a) => ({
-              actionType: a.actionType,
-              channel: a.channel,
-              outcome: a.outcome,
-              attemptNumber: a.attemptNumber,
-              agentReasoning: a.agentReasoning,
-            })),
-          }
-        : null,
+      payment: {
+        id: fakeRazorpayPaymentId,
+        errorCode: scenario.errorCode,
+        errorReason: scenario.errorReason,
+        errorSource: scenario.errorSource,
+        errorStep: scenario.errorStep,
+        errorDescription: scenario.errorDescription,
+      },
     };
   }
 }
 
-export const checkoutSimulatorService = new CheckoutSimulatorService();
+export const responseSimulatorService = new ResponseSimulatorService();

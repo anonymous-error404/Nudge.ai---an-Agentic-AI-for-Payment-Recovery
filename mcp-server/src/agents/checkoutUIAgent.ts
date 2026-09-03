@@ -37,3 +37,4 @@ Provide the UI message.`;
     return "Your payment failed. Please try again.";
   }
 }
+

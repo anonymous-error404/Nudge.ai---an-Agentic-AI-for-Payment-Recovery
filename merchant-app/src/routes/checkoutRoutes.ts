@@ -7,14 +7,6 @@ router.post(
   "/api/checkout",
   checkoutController.checkout.bind(checkoutController),
 );
-router.post(
-  "/api/checkout/simulate",
-  checkoutController.simulateCheckout.bind(checkoutController),
-);
-router.get(
-  "/api/dev/failure-scenarios",
-  checkoutController.getFailureScenarios.bind(checkoutController),
-);
 router.get(
   "/api/orders/retry/:token",
   checkoutController.getOrderByRetryToken.bind(checkoutController),

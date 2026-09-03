@@ -1,4 +1,4 @@
-import { redisConnection, toolResultKey } from "../queue/recoveryQueue";
+import { redisConnection, toolResultKey } from "../queue/jobQueue";
 
 class ToolResultService {
   /**
@@ -14,3 +14,4 @@ class ToolResultService {
 }
 
 export const toolResultService = new ToolResultService();
+

@@ -100,3 +100,12 @@ model RecoveryAction {
 
   @@map("recovery_actions")
 }
+
+model AnalyticsChatSession {
+  id        String   @id @default(cuid())
+  messages  String   @default("[]") // JSON array of { role, content }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("analytics_chat_sessions")
+}

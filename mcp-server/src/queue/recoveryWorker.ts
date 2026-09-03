@@ -1,5 +1,5 @@
 import { Worker, Job } from "bullmq";
-import { recoveryQueue, redisConnection } from "./recoveryQueue";
+import { recoveryQueue, redisConnection } from "./jobQueue";
 import { RecoveryJobPayload } from "../types";
 import { recoveryActionRepo } from "../repositories/recoveryActionRepo";
 import { ActionType, RecoveryOutcome } from "../enums";
@@ -267,3 +267,4 @@ export function startRecoveryWorker() {
     console.log(`❌ BullMQ job ${job?.id} failed: ${err}`),
   );
 }
+

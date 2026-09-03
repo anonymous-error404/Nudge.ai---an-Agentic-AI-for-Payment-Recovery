@@ -3,8 +3,8 @@
  * Returns enriched (but non-PII) context about a failure event for AI to reason over.
  * AI may call this before deciding which recovery action to take.
  */
-import { prisma } from "../lib/prismaClient";
-import { failureEventRepository } from "../repositories/failureEventRepository";
+import { prisma } from "../../../src/lib/prismaClient";
+import { failureEventRepository } from "../../../src/repositories/failureEventRepository";
 
 export const queryFailureContextSchema = {
   type: "function" as const,
@@ -63,8 +63,8 @@ export async function executeQueryFailureContext(args: {
   const totalOrders = customer?.orders?.length ?? 0;
   const successfulPayments =
     customer?.orders
-      ?.flatMap((o) => o.payments)
-      .filter((p) => p.status === "captured").length ?? 0;
+      ?.flatMap((o: any) => o.payments)
+      .filter((p: any) => p.status === "captured").length ?? 0;
 
   // Return non-PII enriched context
   return {
@@ -77,7 +77,7 @@ export async function executeQueryFailureContext(args: {
           event.payment.order.id,
         )
       : event.recoveryActions
-    ).map((a) => ({
+    ).map((a: any) => ({
       attempt: a.attemptNumber,
       action_type: a.actionType,
       outcome: a.outcome,
@@ -97,3 +97,6 @@ export async function executeQueryFailureContext(args: {
     customer_name: customer?.name ?? "Customer",
   };
 }
+
+
+

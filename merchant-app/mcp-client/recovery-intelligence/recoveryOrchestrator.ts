@@ -1,14 +1,18 @@
-import { FailureCategory } from "../enums";
+import { FailureCategory } from "../../src/enums";
 import { mcpClient } from "./recoveryAgentMCPClientService";
 
 export async function handlePaymentFailure(
   failureEventId: string,
   category: FailureCategory,
-  paymentId: string
+  paymentId: string,
 ) {
   // Always send to MCP Server for real-time AI decision
-  const result = await mcpClient.submitRecoveryJob(failureEventId, category, paymentId);
-  
+  const result = await mcpClient.submitRecoveryJob(
+    failureEventId,
+    category,
+    paymentId,
+  );
+
   return {
     uiMessage: result.uiMessage || "Your payment failed. Please try again.",
   };
