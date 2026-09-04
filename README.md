@@ -4,7 +4,7 @@ An intelligent, multi-agent system designed to automatically recover failed paym
 
 The core innovation of this project is its **Model Context Protocol (MCP) Client-Server Architecture**. It strictly isolates the AI intelligence from sensitive merchant data. The AI dynamically analyzes failure contexts, writes personalized notifications, executes optimal recovery strategies, and answers complex analytical questions—all without ever having direct access to the merchant's underlying database or PII.
 
-To demonstrate this system in action, we have built **TechZone**, a fully functioning mock e-commerce storefront and admin dashboard that acts as the "Merchant Client".
+To demonstrate this system in action, I have built **TechZone**, a fully functioning mock e-commerce storefront and admin dashboard that acts as the "Merchant Client".
 
 ---
 
