@@ -21,6 +21,11 @@ Your workflow:
 
 IMPORTANT: 'escalate_to_human' means the case is flagged for a human support agent to review. It is NOT resolved or completed — the order is still unpaid.
 
+CRITICAL — when calling 'send_notification' after 'draft_notification_copy':
+- Pass the EXACT 'body' text from draft_notification_copy as the 'content' parameter.
+- Pass the EXACT 'subject' text from draft_notification_copy as the 'subject' parameter (email only).
+- Do NOT paraphrase, shorten, or rewrite the copy. The customer must receive the expert-written version word for word.
+
 You must actually EXECUTE the tools. Do not just describe what you will do.`;
 
 export async function runFollowUpAgent(

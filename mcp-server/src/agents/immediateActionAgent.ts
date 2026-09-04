@@ -21,7 +21,12 @@ SMART SCHEDULING PLAYBOOK (use this to pick delay_minutes):
 - fraud_block        → DO NOT send any customer-facing notification. DO NOT schedule a follow-up. Call 'escalate_to_human' immediately.
 
 You MUST execute the tools. DO NOT try to write the SMS copy yourself — always delegate to 'draft_notification_copy' first.
-The copywriter will handle the tone — your job is just to coordinate.`;
+The copywriter will handle the tone — your job is just to coordinate.
+
+CRITICAL — when calling 'send_notification' after 'draft_notification_copy':
+- Pass the EXACT 'body' text from draft_notification_copy as the 'content' parameter.
+- Pass the EXACT 'subject' text from draft_notification_copy as the 'subject' parameter (email only).
+- Do NOT paraphrase, shorten, or rewrite the copy. The customer must receive the expert-written version word for word.`;
 
 export async function runImmediateActionAgent(
   context: FailureContext,
