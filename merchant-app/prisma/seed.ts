@@ -79,7 +79,8 @@ async function main() {
     prisma.product.upsert({
       where: { id: "prod_001" },
       update: {
-        imageUrl: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop"
+        imageUrl: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop",
+        offers: "Free carrying case worth ₹499 on purchase today!",
       },
       create: {
         id: "prod_001",
@@ -88,12 +89,14 @@ async function main() {
         price: 799900, // ₹7,999
         imageUrl: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop",
         stock: 50,
+        offers: "Free carrying case worth ₹499 on purchase today!",
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_002" },
       update: {
-        imageUrl: "https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=800&auto=format&fit=crop"
+        imageUrl: "https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=800&auto=format&fit=crop",
+        offers: "10% off on UPI payments — save ₹350!",
       },
       create: {
         id: "prod_002",
@@ -102,12 +105,14 @@ async function main() {
         price: 349900, // ₹3,499
         imageUrl: "https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=800&auto=format&fit=crop",
         stock: 30,
+        offers: "10% off on UPI payments — save ₹350!",
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_003" },
       update: {
-        imageUrl: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop"
+        imageUrl: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop",
+        offers: "Free 1-year extended warranty (worth ₹1,299) included!",
       },
       create: {
         id: "prod_003",
@@ -116,12 +121,14 @@ async function main() {
         price: 1299900, // ₹12,999
         imageUrl: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop",
         stock: 25,
+        offers: "Free 1-year extended warranty (worth ₹1,299) included!",
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_004" },
       update: {
-        imageUrl: "https://images.unsplash.com/photo-1621330396173-e41b1cafd17f?q=80&w=800&auto=format&fit=crop"
+        imageUrl: "https://images.unsplash.com/photo-1621330396173-e41b1cafd17f?q=80&w=800&auto=format&fit=crop",
+        offers: "Buy 2 get 15% off — perfect for home + office setup!",
       },
       create: {
         id: "prod_004",
@@ -130,12 +137,14 @@ async function main() {
         price: 149900, // ₹1,499
         imageUrl: "https://images.unsplash.com/photo-1621330396173-e41b1cafd17f?q=80&w=800&auto=format&fit=crop",
         stock: 100,
+        offers: "Buy 2 get 15% off — perfect for home + office setup!",
       },
     }),
     prisma.product.upsert({
       where: { id: "prod_005" },
       update: {
-        imageUrl: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?q=80&w=800&auto=format&fit=crop"
+        imageUrl: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?q=80&w=800&auto=format&fit=crop",
+        offers: "Limited time: free USB-C cable (₹299 value) with every order!",
       },
       create: {
         id: "prod_005",
@@ -144,6 +153,7 @@ async function main() {
         price: 599900, // ₹5,999
         imageUrl: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?q=80&w=800&auto=format&fit=crop",
         stock: 40,
+        offers: "Limited time: free USB-C cable (₹299 value) with every order!",
       },
     }),
   ]);

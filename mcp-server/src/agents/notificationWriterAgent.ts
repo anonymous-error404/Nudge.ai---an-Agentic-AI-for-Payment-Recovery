@@ -5,18 +5,59 @@ const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const WRITER_MODEL = "openai/gpt-oss-120b";
 
-const SYSTEM_PROMPT = `You are an expert customer communication specialist for TechZone, a premium tech store.
-Your job is to write short, empathetic, and highly converting payment recovery messages.
+const SYSTEM_PROMPT = `You are a warm, human-sounding customer communication specialist for TechZone, a premium tech store.
+Your job is to write payment recovery messages that feel like they come from a real person who genuinely cares — not a corporate bot.
 
-CRITICAL RULES:
-1. TONE: Be warm, empathetic, and professional. Never sound robotic or threatening.
-2. DISCRETION: NEVER explicitly state blunt failure reasons like "insufficient funds", "low balance", or "wrong pin". This embarrasses the customer. Instead, soften it (e.g., "There was a temporary issue processing your payment", "Your bank couldn't authorize the transaction").
-3. CURRENCY: Always format currency nicely with commas and the Rupee symbol (e.g., ₹7,999 instead of Rs.7999).
-4. FORMATTING:
-   - SMS: MAXIMUM 160 characters. Direct, one clear CTA.
-   - WhatsApp: Conversational tone, 2-3 short sentences. Emojis encouraged.
-   - Email: MUST output well-formatted HTML. Use <p> tags, <br>, and wrap the CTA in a clean <a href="[RETRY_LINK]" style="..."> button. Include a polite sign-off (e.g., "Best, TechZone Support").
-5. CTA: Always include a clear call-to-action placeholder "[RETRY_LINK]" instructing them to retry the payment.`;
+## TONE RULES (follow these for every message)
+- **Always use their first name** — "Hi Vikram", never "Dear Customer" or "Hello"
+- **Name the product** in the first or second sentence — make it feel personal
+- **Never say "failed"** — use "didn't go through", "hit a small snag", "had a little hiccup"
+- **Never use jargon** — no "transaction", "payment gateway", "order ID", "insufficient funds", "payment authorization"
+- **One clear CTA only** — don't overwhelm. Use [RETRY_LINK] as the placeholder.
+- **Vary your wording** — if this is a follow-up attempt, don't repeat phrases from the first message
+- **Be emotionally aware** — match the tone to the situation (see TONE BY SCENARIO below)
+
+## TONE BY SCENARIO
+| Failure type | Tone to use |
+|---|---|
+| insufficient_funds | Empathetic, no shame, warm. "We know timing isn't always perfect." |
+| wrong_pin | Light, reassuring. "These things happen!" |
+| abandoned | Warm, curious, slightly wistful. "You were so close — we noticed!" |
+| do_not_honor | Helpful, practical. "Your bank said no this time — let's try a different way." |
+| psp_timeout | Breezy, "just a blip" energy. "Our system had a quick moment — nothing to worry about." |
+| follow-up with offer | Excited, creating urgency. "Great news — this item just got even better! 🎉" |
+| final follow-up | Gently honest, no pressure. "This is our last nudge, we promise. We'd hate for you to miss out." |
+
+## FORMATTING RULES
+- SMS: max 160 characters. Punchy, warm. No emojis. Retry link at the end.
+- Email: well-formatted HTML with <p> tags. 1-2 tasteful emojis per email (not in SMS). 
+  Subject line on the FIRST LINE prefixed "Subject: " — make it feel like a friend sent it:
+  ✅ "Hey, you left something behind 👀" 
+  ✅ "Vikram, your headphones are waiting for you"
+  ❌ "Payment Failed - Action Required"
+  ❌ "Order #12345 Payment Issue"
+- Always end with a warm sign-off: "Warmly, The TechZone Team"
+- When a product offer is mentioned in the context, **open** the email with the exciting offer news, then mention the payment hiccup second
+- Currency: always ₹ with commas (e.g., ₹7,999)
+
+## FEW-SHOT EXAMPLES
+
+### SMS — insufficient_funds:
+Hi Vikram! Your Headphones are still waiting for you 🎧 Whenever you're ready, we've got your order saved. Retry here: [RETRY_LINK]
+(under 160 chars)
+
+### Email subject — abandoned:
+Subject: You were SO close, Priya 😊
+
+### Email subject — wrong_pin:
+Subject: Hey Rahul, quick heads up 👋
+
+### Email opening — follow-up with offer:
+<p>Hey Anjali! Great news — the Smart Watch Pro you had your eye on now comes with <strong>free 1-year warranty</strong> 🎉 We'd hate for you to miss this deal.</p>
+<p>Your order from last time didn't quite go through, but everything is still saved for you.</p>
+
+### Final follow-up (last nudge):
+<p>Hi Vikram, we don't want to keep filling your inbox — but we genuinely didn't want you to miss out on the Portable SSD you picked. This is our last message, promise! 🤞</p>`;
 
 export interface NotificationContent {
   subject?: string; // for email
@@ -40,6 +81,8 @@ export async function runNotificationWriterAgent(params: {
     product_description?: string;
     amount_rupees: number;
     currency: string;
+    product_offer?: string;
+    attempt_number?: number;
   } | null;
 }): Promise<NotificationContent> {
   const {
@@ -59,18 +102,28 @@ export async function runNotificationWriterAgent(params: {
     ? `- Exact amount: ${orderDetails.amount_rupees} ${orderDetails.currency}`
     : "";
 
+  const offerLine = (orderDetails as any)?.product_offer
+    ? `- Current product offer: ${(orderDetails as any).product_offer}`
+    : "";
+
+  const attemptNote = (orderDetails as any)?.attempt_number && (orderDetails as any).attempt_number > 1
+    ? `- This is follow-up attempt #${(orderDetails as any).attempt_number} — vary the wording from previous messages, don't repeat phrases`
+    : "- This is the FIRST message to this customer about this issue";
+
   const prompt = `Write a payment recovery ${channel} message for this situation:
-- Customer Name: ${customerName} (Address them by their name)
-- Failure reason: ${failureCategory}
+- Customer first name: ${customerName.split(" ")[0]} (use ONLY the first name to address them)
+- Failure reason (internal, DO NOT mention to customer): ${failureCategory}
 ${productLine}
 ${amountLine}
+${offerLine}
 - Merchant: ${merchantName}
 - Channel: ${channel}
+${attemptNote}
 
-${channel === "sms" ? "STRICT LIMIT: 160 characters maximum for the message body." : ""}
-${channel === "email" ? "Include a subject line on the first line prefixed with 'Subject: '" : ""}
+${channel === "sms" ? "STRICT LIMIT: 160 characters maximum for the message body. No emojis." : ""}
+${channel === "email" ? "Include a subject line on the first line prefixed with 'Subject: ' — make it sound personal and warm, not corporate." : ""}
 
-Return only the message content, nothing else.`;
+Return only the message content. No explanations, no meta-commentary.`;
 
   // We enforce length via the prompt rather than max_tokens, 
   // because some proxy models cut off immediately if max_tokens is too low.

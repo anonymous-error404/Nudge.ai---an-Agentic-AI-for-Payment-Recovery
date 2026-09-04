@@ -64,6 +64,21 @@ class McpCallbackController {
                   ? String((result as any).message)
                   : null,
               },
+            }).then(async (action) => {
+              // When escalating, mark the failure event status so admin dashboard shows it correctly
+              if (tool === "escalate_to_human") {
+                await prisma.failureEvent.update({
+                  where: { id: failureEventId },
+                  data: { status: "escalated" },
+                });
+              } else if (tool === "send_notification" && isSuccess) {
+                // Mark as in_progress once first action is taken
+                await prisma.failureEvent.update({
+                  where: { id: failureEventId },
+                  data: { status: "in_progress" },
+                }).catch(() => {}); // non-fatal
+              }
+              return action;
             });
           })
           .catch((e) =>

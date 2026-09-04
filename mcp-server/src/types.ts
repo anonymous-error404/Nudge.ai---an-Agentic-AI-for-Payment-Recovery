@@ -31,6 +31,7 @@ export interface FailureContext {
     order_id: string;
     product_name: string;
     product_description?: string;
+    product_offer?: string | null;
     amount_rupees: number;    // exact amount in INR (not paise)
     currency: string;
   } | null;

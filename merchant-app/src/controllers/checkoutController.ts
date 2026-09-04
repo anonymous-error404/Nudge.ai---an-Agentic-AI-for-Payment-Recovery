@@ -234,6 +234,16 @@ class CheckoutController {
             status: "captured",
           },
         });
+
+        // Mark the corresponding FailureEvent as resolved now that payment succeeded
+        await prisma.failureEvent.updateMany({
+          where: {
+            payment: {
+              orderId: order.id,
+            },
+          },
+          data: { status: "resolved" },
+        }).catch((e: Error) => console.warn("Could not mark failure event resolved:", e.message));
       }
 
       res.json({

@@ -66,12 +66,12 @@ export async function executeQueryFailureContext(args: {
       ?.flatMap((o: any) => o.payments)
       .filter((p: any) => p.status === "captured").length ?? 0;
 
-  // Return non-PII enriched context
   return {
     failure_event_id: event.id,
     classified_category: event.classifiedCategory,
     root_cause: event.rootCause,
     detected_at: event.detectedAt,
+    event_status: (event as any).status ?? "pending",
     previous_recovery_attempts: (event.payment?.order
       ? await failureEventRepository.getRecoveryActionsByOrderId(
           event.payment.order.id,
@@ -87,6 +87,7 @@ export async function executeQueryFailureContext(args: {
     order_status: event.payment?.order?.status ?? "unknown",
     order_amount_paise: event.payment?.order?.amount,
     product_name: event.payment?.order?.product?.name ?? "unknown",
+    product_offer: event.payment?.order?.product?.offers ?? null,
     customer_insights: {
       total_orders: totalOrders,
       successful_payments: successfulPayments,

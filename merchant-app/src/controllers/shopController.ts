@@ -70,7 +70,7 @@ class ShopController {
             confirmedRecovery = !!repurchase;
           }
 
-          return { ...e, confirmedRecovery };
+          return { ...e, confirmedRecovery, eventStatus: (e as any).status ?? "pending" };
         }),
       );
 

@@ -116,6 +116,18 @@
   async function loadOrder() {
     if (!token) return showError('No retry token in URL.');
 
+    // Auto-login the customer associated with this retry token
+    // This establishes a proper session so the customer is authenticated
+    try {
+      await fetch('/api/auth/token-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+    } catch (e) {
+      // Non-fatal — login may already exist
+    }
+
     const [orderRes, scenariosRes] = await Promise.all([
       fetch(`/api/orders/retry/${token}`),
       fetch('/api/dev/failure-scenarios'),
@@ -137,10 +149,23 @@
     document.getElementById('product-description').textContent = d.product.description;
     document.getElementById('product-price').textContent =
       '₹' + (d.currentTotal / 100).toLocaleString('en-IN');
-    document.getElementById('customer-display').textContent =
-      `${d.customer.name} (${d.customer.email})`;
+
+    // Show authenticated customer name with a welcome banner
+    const customerEl = document.getElementById('customer-display');
+    customerEl.innerHTML = `<strong>${d.customer.name}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(${d.customer.email})</span>
+      <span style="margin-left:0.5rem; background:rgba(99,102,241,0.12); color:var(--accent); border-radius:12px; padding:0.1rem 0.5rem; font-size:0.72rem; font-weight:600;">✓ Logged in</span>`;
+
     document.getElementById('quantity-display').textContent =
       `${d.quantity} unit${d.quantity > 1 ? 's' : ''}`;
+
+    // Show offer badge on retry page if product has an active offer
+    if (d.product.offers) {
+      const offerEl = document.createElement('div');
+      offerEl.className = 'offer-badge';
+      offerEl.style.marginTop = '0.75rem';
+      offerEl.textContent = '🎁 ' + d.product.offers;
+      document.getElementById('product-price').after(offerEl);
+    }
 
     // Show price change notice if price differs
     if (d.originalAmount !== d.currentTotal) {

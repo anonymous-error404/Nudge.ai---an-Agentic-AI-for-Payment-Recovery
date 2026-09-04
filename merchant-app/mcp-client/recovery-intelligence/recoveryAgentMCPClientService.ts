@@ -73,6 +73,7 @@ async function buildFailureContext(
           order_id: order.id,
           product_name: order.product?.name ?? "your item",
           product_description: order.product?.description ?? undefined,
+          product_offer: order.product?.offers ?? null,
           amount_rupees: Math.round(order.amount / 100), // Razorpay stores in paise
           currency: "INR",
         }

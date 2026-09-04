@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Account - TechZone</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .auth-container { max-width:440px; margin:60px auto; background:var(--surface); padding:2rem; border-radius:var(--radius-lg); border:1px solid var(--border); box-shadow:var(--shadow); }
+    .auth-header { text-align:center; margin-bottom:1.8rem; }
+    .auth-header h1 { font-size:1.4rem; margin-bottom:.3rem; }
+    .auth-header p { color:var(--text-muted); font-size:.875rem; }
+    .form-group { margin-bottom:1rem; }
+    .form-group label { display:block; margin-bottom:.45rem; font-size:.875rem; font-weight:500; }
+    .form-group input { width:100%; padding:.7rem .85rem; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:.9rem; transition:border-color .15s; box-sizing:border-box; }
+    .form-group input:focus { outline:none; border-color:var(--accent); }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+    .notif-label { font-size:.875rem; font-weight:500; margin-bottom:.5rem; display:block; }
+    .notif-options { display:flex; gap:1rem; }
+    .notif-option { display:flex; align-items:center; gap:.4rem; font-size:.875rem; color:var(--text-muted); cursor:pointer; }
+    .notif-option input[type="checkbox"] { accent-color:var(--accent); width:15px; height:15px; cursor:pointer; }
+    .error-msg { color:var(--danger); font-size:.85rem; margin-top:.8rem; text-align:center; display:none; }
+    .success-msg { color:#22c55e; font-size:.85rem; margin-top:.8rem; text-align:center; display:none; }
+    .divider { margin:1.5rem 0; border:none; border-top:1px solid var(--border); }
+    .login-link { text-align:center; font-size:.85rem; color:var(--text-muted); }
+    .login-link a { color:var(--accent); text-decoration:none; font-weight:600; }
+    .btn-block { width:100%; justify-content:center; padding:.75rem; font-size:.95rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
+    <div class="nav-links"><a href="/login" class="btn btn-outline" style="font-size:.85rem;padding:.4rem .9rem;">Login</a></div>
+  </nav>
+  <div class="auth-container">
+    <div class="auth-header">
+      <div style="font-size:2rem;margin-bottom:.5rem;">🛍️</div>
+      <h1>Create Your Account</h1>
+      <p>Join TechZone and start shopping for premium tech</p>
+    </div>
+    <form id="register-form" autocomplete="off">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="name">Full Name</label>
+          <input type="text" id="name" required placeholder="Vikram Nair">
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" required placeholder="+91 98765 43210">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" required placeholder="vikram@example.com">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" required placeholder="Choose a password" minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Create Account</button>
+      <div id="error-msg" class="error-msg"></div>
+      <div id="success-msg" class="success-msg"></div>
+    </form>
+    <hr class="divider">
+    <p class="login-link">Already have an account? <a href="/login">Sign in →</a></p>
+  </div>
+  <script>
+    lucide.createIcons();
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const errorEl = document.getElementById('error-msg');
+      const successEl = document.getElementById('success-msg');
+      const btn = document.getElementById('submit-btn');
+      const notificationPreferences = 'email,sms';
+      errorEl.style.display = 'none'; successEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Creating account...';
+      try {
+        const res = await fetch('/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,email,phone,password,notificationPreferences}) });
+        const data = await res.json();
+        if (data.success) {
+          successEl.textContent = 'Welcome, ' + data.user.name + '! Redirecting to the store...';
+          successEl.style.display = 'block';
+          setTimeout(() => window.location.href = '/', 1200);
+        } else {
+          errorEl.textContent = data.error || 'Registration failed. Please try again.';
+          errorEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Create Account';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Server error. Please try again.';
+        errorEl.style.display = 'block'; btn.disabled = false; btn.textContent = 'Create Account';
+      }
+    });
+  </script>
+</body>
+</html>

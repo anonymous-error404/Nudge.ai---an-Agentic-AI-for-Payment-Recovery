@@ -139,6 +139,14 @@ class WebhookService {
       method: payload.method,
     });
 
+    // Mark corresponding failure events as resolved
+    await import("../lib/prismaClient").then(({ prisma }) => 
+      prisma.failureEvent.updateMany({
+        where: { payment: { orderId: order.id } },
+        data: { status: "resolved" }
+      }).catch(e => console.warn("Failed to update failure event status:", e.message))
+    );
+
     console.log(
       `💰 Payment captured: ${payload.id} — order ${order.id} marked paid`,
     );

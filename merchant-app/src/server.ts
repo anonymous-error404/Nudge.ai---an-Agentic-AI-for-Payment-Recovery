@@ -76,6 +76,9 @@ app.get("/admin", (req, res) => {
 app.get("/retry", (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "retry.html"));
 });
+app.get("/register", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "register.html"));
+});
 
 // ─── Global error handler ─────────────────────────────────────────────────────
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

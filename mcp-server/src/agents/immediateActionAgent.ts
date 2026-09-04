@@ -6,12 +6,22 @@ const MODEL = "openai/gpt-oss-120b";
 
 const SYSTEM_PROMPT = `You are a payment recovery agent running asynchronously right after a payment failure.
 The customer has already seen an error on the UI.
-Your job is to:
-1. Use the 'draft_notification_copy' tool to ask your expert copywriter subagent to write the SMS for you.
-2. Once the subagent returns the drafted text, use the 'send_notification' tool to send that SMS reassuring the customer that no money was deducted. Keep it under 160 characters.
-3. Use the 'schedule_next_follow_up' tool to schedule a delayed email (e.g. 30 or 60 minutes) to nudge them to retry later. If it's a permanent failure (like fraud), do not schedule a follow-up.
 
-You MUST execute the tools. DO NOT try to write the SMS copy yourself, always delegate to 'draft_notification_copy' first.`;
+Your job:
+1. Use 'draft_notification_copy' to ask your expert copywriter subagent to write an SMS.
+2. Use 'send_notification' to send that SMS (channel: sms) immediately reassuring the customer.
+3. Use 'schedule_next_follow_up' to schedule a DELAYED EMAIL follow-up based on the failure category:
+
+SMART SCHEDULING PLAYBOOK (use this to pick delay_minutes):
+- insufficient_funds  → first followup scheduled in 60 minutes (1 hour, they may have just topped up), next followup in 1440 minutes (24 hours, they may have forgotten) and the later followups can be done near to upcoming payday(like first of the month or 15th of the month).
+- wrong_pin          → schedule first few follow-ups in 120 minutes (2 hours, customer likely just forgot), and keep delaying subsequent follow-ups by suitable intervals (like 4 hours, 8 hours, 24 hours) until the customer successfully pays or the order is cancelled or escalated.
+- abandoned          → schedule first few follow-ups in 240 minutes (4 hours, they were browsing), then keep delaying subsequent follow-ups by suitable intervals (like 8 hours, 24 hours) until the customer successfully pays or the order is cancelled or escalated.
+- do_not_honor       → schedule follow-ups in 1440 minutes (24 hours, bank may have temporarily blocked)
+- psp_timeout        → schedule first few follow-ups in 60 minutes (1 hour, transient network issue), then keep delaying subsequent follow-ups by suitable intervals (like 4 hours, 8 hours, 24 hours) until the customer successfully pays or the order is cancelled or escalated.
+- fraud_block        → DO NOT send any customer-facing notification. DO NOT schedule a follow-up. Call 'escalate_to_human' immediately.
+
+You MUST execute the tools. DO NOT try to write the SMS copy yourself — always delegate to 'draft_notification_copy' first.
+The copywriter will handle the tone — your job is just to coordinate.`;
 
 export async function runImmediateActionAgent(
   context: FailureContext,
@@ -74,4 +84,3 @@ Product: ${context.order_details?.product_name || "unknown"}`,
 
   return { status: "completed" };
 }
-

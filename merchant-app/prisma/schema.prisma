@@ -78,9 +78,10 @@ model Payment {
 model FailureEvent {
   id                 String           @id @default(cuid())
   paymentId          String
-  classifiedCategory String           // insufficient_funds | wrong_pin | abandoned | do_not_honor | psp_timeout
+  classifiedCategory String           // insufficient_funds | wrong_pin | abandoned | do_not_honor | psp_timeout | fraud_block
   detectedAt         DateTime         @default(now())
   rootCause          String
+  status             String           @default("pending") // pending | in_progress | escalated | resolved
   payment            Payment          @relation(fields: [paymentId], references: [id])
   recoveryActions    RecoveryAction[]
 

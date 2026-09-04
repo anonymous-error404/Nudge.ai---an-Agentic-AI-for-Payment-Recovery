@@ -45,6 +45,7 @@
           <p>${p.description}</p>
           <div class="price">₹${(p.price / 100).toLocaleString('en-IN')}</div>
           <div class="price-sub">incl. all taxes</div>
+          ${p.offers ? `<div class="offer-badge">🎁 ${p.offers}</div>` : ''}
           <button class="btn btn-primary" onclick="event.preventDefault(); window.location='/product?id=${p.id}'">
             Buy Now →
           </button>

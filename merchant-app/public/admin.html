@@ -319,7 +319,14 @@ async function loadAnalytics(){
           const latestCell=latest
             ?`${ACT_ICONS[latest.actionType]||'•'} <span style="font-size:.82rem;text-transform:capitalize;">${latest.actionType?.replace(/_/g,' ')}</span><br><span style="font-size:.74rem;color:var(--text-muted);">${timeAgo(latest.executedAt||latest.createdAt)}</span>`
             :'<span style="color:var(--text-muted);font-size:.8rem;">None yet</span>';
-          const oc=e.confirmedRecovery?bdg('✓ Recovered','badge-success'):e.recoveryActions?.length?bdg('⚡ In Progress','badge-warning'):bdg('⏳ Pending','badge-neutral');
+          const eventStatus = e.eventStatus || e.status || 'pending';
+          const oc = e.confirmedRecovery
+            ? bdg('✓ Recovered','badge-success')
+            : eventStatus === 'escalated'
+              ? bdg('🚨 Escalated','badge-danger')
+              : e.recoveryActions?.length
+                ? bdg('⚡ In Progress','badge-warning')
+                : bdg('⏳ Pending','badge-neutral');
           return`<tr class="audit-row" onclick="openDrawer(${i})">
             <td style="font-weight:600;">${e.payment?.order?.customer?.name||'—'}</td>
             <td style="font-size:.82rem;color:var(--text-muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.payment?.order?.product?.name||'—'}</td>
