@@ -32,7 +32,17 @@ export const sendNotificationSchema = {
         template: {
           type: "string",
           description:
-            "Template key or free-text message hint. The notification writer agent will produce the final copy.",
+            "Template key or free-text message hint. Ignored if 'content' is provided.",
+        },
+        content: {
+          type: "string",
+          description:
+            "The FULL verbatim message body to send. Copy this EXACTLY from the 'body' field returned by draft_notification_copy. Do NOT paraphrase or shorten it.",
+        },
+        subject: {
+          type: "string",
+          description:
+            "Email subject line. Only used when channel is 'email'. Copy this EXACTLY from the 'subject' field returned by draft_notification_copy.",
         },
       },
       required: ["customer_id", "channel", "template"],

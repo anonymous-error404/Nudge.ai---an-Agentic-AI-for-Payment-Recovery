@@ -2,49 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Orders - TechZone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    .orders-container {
-      max-width: 900px;
-      margin: 2rem auto;
-      background: var(--surface);
-      padding: 2rem;
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--border);
-    }
-    .order-card {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.5rem;
-      margin-bottom: 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .order-card .order-info {
-      flex: 1;
-    }
-    .order-status {
-      padding: 0.4rem 0.8rem;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .status-paid { background: rgba(76, 201, 240, 0.15); color: var(--success); border: 1px solid rgba(76, 201, 240, 0.3); }
-    .status-failed { background: rgba(247, 37, 133, 0.15); color: var(--danger); border: 1px solid rgba(247, 37, 133, 0.3); }
-    .status-created { background: rgba(255, 179, 71, 0.15); color: var(--warning); border: 1px solid rgba(255, 179, 71, 0.3); }
-    
-    .retry-btn {
-      margin-top: 0.5rem;
-      padding: 0.4rem 0.8rem;
-      font-size: 0.8rem;
-    }
-  </style>
 </head>
 <body>
   <nav>
@@ -55,64 +19,83 @@
 
   <div class="container">
     <div class="orders-container">
-      <h1 style="margin-bottom: 1.5rem; font-weight:800; font-size:1.8rem;">My Orders</h1>
-      <div id="loading">Loading orders...</div>
+      <div class="orders-header">
+        <h1>My Orders</h1>
+        <p>Your purchase history</p>
+      </div>
+
+      <div id="loading" class="orders-loading">
+        <div class="orders-spinner"></div>
+        Loading orders&hellip;
+      </div>
       <div id="orders-list"></div>
     </div>
   </div>
 
   <script>
     lucide.createIcons();
-    
+
     async function fetchOrders() {
       try {
         const res = await fetch('/api/auth/my-orders');
         const data = await res.json();
         const list = document.getElementById('orders-list');
         document.getElementById('loading').style.display = 'none';
-        
+
         if (!data.success) {
           list.innerHTML = `<p style="color:var(--danger)">Error: ${data.error}</p>`;
           return;
         }
-        
+
         if (data.orders.length === 0) {
-          list.innerHTML = `<p style="color:var(--text-muted)">You haven't placed any orders yet.</p>`;
+          list.innerHTML = `
+            <div class="orders-empty">
+              <i data-lucide="shopping-bag"></i>
+              <p>You haven't placed any orders yet.</p>
+              <a href="/" class="btn btn-primary">Start Shopping</a>
+            </div>`;
+          lucide.createIcons();
           return;
         }
-        
+
         list.innerHTML = data.orders.map(order => {
           let statusClass = 'status-created';
-          if (order.status === 'paid') statusClass = 'status-paid';
-          if (order.status === 'failed') statusClass = 'status-failed';
-          
+          let indicatorClass = 'default';
+          if (order.status === 'paid') { statusClass = 'status-paid'; indicatorClass = 'paid'; }
+          if (order.status === 'failed') { statusClass = 'status-failed'; indicatorClass = 'failed'; }
+
           const amountStr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(order.amount / 100);
-          const dateStr = new Date(order.createdAt).toLocaleDateString();
-          
+          const dateStr = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
           let actionBtn = '';
           if (order.status === 'failed' || order.status === 'created') {
-            actionBtn = `<a href="/retry?token=${order.retryToken}" class="btn btn-primary retry-btn">Retry Payment</a>`;
+            actionBtn = `<a href="/retry?token=${order.retryToken}" class="btn btn-primary retry-btn"><i data-lucide="refresh-cw"></i> Retry Payment</a>`;
           }
-          
+
           return `
             <div class="order-card">
-              <div class="order-info">
-                <h3 style="margin-bottom:0.25rem;">${order.product.name}</h3>
-                <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;">Order ID: ${order.id} &bull; ${dateStr}</div>
-                <div style="font-size:1.1rem; font-weight:700;">${amountStr}</div>
+              <div class="order-status-indicator ${indicatorClass}"></div>
+              <div class="order-body">
+                <h3 class="order-product-name">${order.product.name}</h3>
+                <div class="order-meta">
+                  <span><i data-lucide="hash"></i>${order.id}</span>
+                  <span><i data-lucide="calendar"></i>${dateStr}</span>
+                </div>
               </div>
-              <div style="text-align:right;">
+              <div class="order-right">
+                <div class="order-amount">${amountStr}</div>
                 <div class="order-status ${statusClass}">${order.status}</div>
                 ${actionBtn}
               </div>
             </div>
           `;
         }).join('');
+        lucide.createIcons();
       } catch (err) {
-        document.getElementById('loading').innerHTML = 'Error loading orders.';
+        document.getElementById('loading').innerHTML = '<p style="color:var(--danger)">Error loading orders.</p>';
       }
     }
-    
+
     // Make sure user is logged in first
     fetch('/api/auth/me').then(res => res.json()).then(data => {
       if (!data.success || !data.user || data.user.role === 'admin') {

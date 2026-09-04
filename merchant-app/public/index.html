@@ -3,29 +3,269 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TechZone — Mock Merchant Store</title>
+  <title>TechZone — Premium Tech Store</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* ── Hero ── */
+    .hero {
+      background: var(--bg, #FAFAF8);
+      padding: 5rem 1.5rem 4rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border, #E2E8F0);
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--accent-glow, rgba(13,148,136,0.12));
+      color: var(--accent, #0D9488);
+      border: 1px solid rgba(13,148,136,0.25);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-eyebrow svg {
+      width: 13px;
+      height: 13px;
+      stroke: var(--accent, #0D9488);
+    }
+
+    .hero h1 {
+      font-family: var(--font-display, 'DM Serif Display', Georgia, serif);
+      font-size: clamp(2.2rem, 5vw, 3.6rem);
+      font-weight: 400;
+      line-height: 1.15;
+      color: var(--text, #0F172A);
+      margin: 0 auto 1rem;
+      max-width: 640px;
+    }
+
+    .hero h1 em {
+      font-style: italic;
+      color: var(--accent, #0D9488);
+    }
+
+    .hero-subtitle {
+      font-size: 1.05rem;
+      color: var(--text-muted, #64748B);
+      max-width: 480px;
+      margin: 0 auto 2rem;
+      line-height: 1.65;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent, #0D9488);
+      color: #fff;
+      font-family: var(--font, 'Inter', sans-serif);
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.75rem 1.75rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.18s ease, box-shadow 0.18s ease;
+      box-shadow: 0 4px 16px rgba(13,148,136,0.22);
+    }
+
+    .hero-cta:hover {
+      background: var(--accent-hover, #0F766E);
+      box-shadow: 0 6px 24px rgba(13,148,136,0.32);
+    }
+
+    .hero-cta svg {
+      width: 15px;
+      height: 15px;
+      stroke: #fff;
+    }
+
+    /* ── Products section ── */
+    .products-section {
+      padding: 1.5rem 0 4rem;
+    }
+
+    .products-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .products-section-header h2 {
+      font-family: var(--font-display, 'DM Serif Display', Georgia, serif);
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--text, #0F172A);
+      margin: 0;
+    }
+
+    #product-count {
+      font-size: 0.85rem;
+      color: var(--text-muted, #64748B);
+    }
+
+    /* ── Product card overrides ── */
+    .product-card {
+      display: flex;
+      flex-direction: column;
+      background: var(--surface, #FFFFFF);
+      border: 1px solid var(--border, #E2E8F0);
+      border-radius: var(--radius, 12px);
+      box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.06));
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .product-card:hover {
+      box-shadow: var(--shadow, 0 4px 16px rgba(0,0,0,0.08));
+      transform: translateY(-2px);
+    }
+
+    .product-card-image {
+      width: 100%;
+      aspect-ratio: 4/3;
+      overflow: hidden;
+      background: var(--bg-2, #F5F5F2);
+    }
+
+    .product-card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease;
+    }
+
+    .product-card:hover .product-card-image img {
+      transform: scale(1.04);
+    }
+
+    .product-card-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      padding: 1.1rem 1.2rem 1.2rem;
+      gap: 0.35rem;
+    }
+
+    .product-card-body h3 {
+      font-family: var(--font, 'Inter', sans-serif);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text, #0F172A);
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    .product-card-body p {
+      font-size: 0.82rem;
+      color: var(--text-muted, #64748B);
+      margin: 0;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .price {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text, #0F172A);
+      margin-top: 0.4rem;
+    }
+
+    .price-sub {
+      font-size: 0.72rem;
+      color: var(--text-dim, #94A3B8);
+      margin-top: -0.15rem;
+    }
+
+    .offer-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text, #0F172A);
+      margin-top: 0.5rem;
+      background: rgba(16, 185, 129, 0.08);
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+    }
+
+    .btn-view {
+      display: block;
+      width: 100%;
+      background: var(--accent, #0D9488);
+      color: #fff;
+      font-family: var(--font, 'Inter', sans-serif);
+      font-size: 0.87rem;
+      font-weight: 600;
+      text-align: center;
+      border: none;
+      border-radius: 999px;
+      padding: 0.6rem 1.25rem;
+      cursor: pointer;
+      margin-top: auto;
+      padding-top: 0.85rem;
+      transition: background 0.18s ease;
+    }
+
+    .btn-view:hover {
+      background: var(--accent-hover, #0F766E);
+    }
+  </style>
 </head>
 <body>
 
+<!-- ── Navigation ── -->
 <nav>
   <a class="nav-brand" href="/"><i data-lucide="zap"></i> TechZone</a>
   <div class="nav-links"></div>
 </nav>
 <script src="/auth.js"></script>
 
+<!-- ── Hero ── -->
 <div class="hero">
-  <h1>Premium Tech, <span>Unbeatable Prices</span></h1>
-  <p>Mock merchant store — Razorpay AI Payment Recovery Agent demo</p>
+  <div class="hero-eyebrow"><i data-lucide="zap"></i> New Arrivals</div>
+  <h1>Premium Tech, <em>Built Different</em></h1>
+  <p class="hero-subtitle">Discover the latest in cutting-edge electronics, handpicked for performance.</p>
+  <a class="hero-cta" href="#products-section" onclick="document.getElementById('products-section').scrollIntoView({behavior:'smooth'});return false;">
+    Shop Now
+    <i data-lucide="arrow-down"></i>
+  </a>
 </div>
 
-<div class="container">
-  <div id="loading" class="loading">
-    <div class="spinner"></div>
-    <p>Loading products…</p>
+<!-- ── Products ── -->
+<div class="container" id="products-section">
+  <div class="products-section">
+    <div class="products-section-header">
+      <h2>All Products</h2>
+      <span id="product-count"></span>
+    </div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading products…</p>
+    </div>
+
+    <div id="products" class="products-grid" style="display:none;"></div>
   </div>
-  <div id="products" class="products-grid" style="display:none;"></div>
 </div>
 
 <script>
@@ -37,17 +277,23 @@
     const grid = document.getElementById('products');
     grid.style.display = 'grid';
 
+    // Update product count
+    const countEl = document.getElementById('product-count');
+    if (countEl) countEl.textContent = `${data.length} products`;
+
     grid.innerHTML = data.map(p => `
       <a class="product-card" href="/product?id=${p.id}">
-        <img src="${p.imageUrl}" alt="${p.name}" loading="lazy" />
+        <div class="product-card-image">
+          <img src="${p.imageUrl}" alt="${p.name}" loading="lazy" />
+        </div>
         <div class="product-card-body">
           <h3>${p.name}</h3>
           <p>${p.description}</p>
-          <div class="price">₹${(p.price / 100).toLocaleString('en-IN')}</div>
+          <div class="price">&#8377;${(p.price / 100).toLocaleString('en-IN')}</div>
           <div class="price-sub">incl. all taxes</div>
-          ${p.offers ? `<div class="offer-badge">🎁 ${p.offers}</div>` : ''}
-          <button class="btn btn-primary" onclick="event.preventDefault(); window.location='/product?id=${p.id}'">
-            Buy Now →
+          ${p.offers ? `<div class="offer-badge">${p.offers}</div>` : ''}
+          <button class="btn-view" onclick="event.preventDefault(); window.location='/product?id=${p.id}'">
+            View Product &rarr;
           </button>
         </div>
       </a>

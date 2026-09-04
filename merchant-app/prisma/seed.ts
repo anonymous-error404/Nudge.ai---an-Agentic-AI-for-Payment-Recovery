@@ -156,6 +156,54 @@ async function main() {
         offers: "Limited time: free USB-C cable (₹299 value) with every order!",
       },
     }),
+    prisma.product.upsert({
+      where: { id: "prod_006" },
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?q=80&w=800&auto=format&fit=crop",
+        offers: "Free 2-year accidental damage protection included!",
+      },
+      create: {
+        id: "prod_006",
+        name: "Laptop Stand Aluminium",
+        description: "Ergonomic aluminium laptop stand, adjustable height, compatible with all 10-17 inch laptops.",
+        price: 249900, // ₹2,499
+        imageUrl: "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?q=80&w=800&auto=format&fit=crop",
+        stock: 60,
+        offers: "Free 2-year accidental damage protection included!",
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: "prod_007" },
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?q=80&w=800&auto=format&fit=crop",
+        offers: "Buy with any keyboard - get 10% off at checkout!",
+      },
+      create: {
+        id: "prod_007",
+        name: "Wireless Ergonomic Mouse",
+        description: "Precision wireless mouse with ergonomic design, 90-day battery life, and silent clicks.",
+        price: 199900, // ₹1,999
+        imageUrl: "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?q=80&w=800&auto=format&fit=crop",
+        stock: 80,
+        offers: "Buy with any keyboard - get 10% off at checkout!",
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: "prod_008" },
+      update: {
+        imageUrl: "https://images.unsplash.com/photo-1606400082777-ef05f3c5cde2?q=80&w=800&auto=format&fit=crop",
+        offers: "Flat Rs.500 off on orders above Rs.3,999 - use code TECH500!",
+      },
+      create: {
+        id: "prod_008",
+        name: "True Wireless Earbuds Pro",
+        description: "ANC earbuds with 32hr total battery, IPX5 water resistance, and crystal-clear calls.",
+        price: 399900, // ₹3,999
+        imageUrl: "https://images.unsplash.com/photo-1606400082777-ef05f3c5cde2?q=80&w=800&auto=format&fit=crop",
+        stock: 45,
+        offers: "Flat Rs.500 off on orders above Rs.3,999 - use code TECH500!",
+      },
+    }),
   ]);
 
   console.log(`✅ Created ${products.length} products`);

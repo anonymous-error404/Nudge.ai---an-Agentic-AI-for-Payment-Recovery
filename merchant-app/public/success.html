@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Payment Successful — TechZone</title>
+  <title>Payment Successful &mdash; TechZone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -22,15 +25,15 @@
     <p>Your order has been placed and payment captured successfully.</p>
 
     <div class="payment-id" id="payment-details">
-      Loading payment details…
+      Loading payment details&hellip;
     </div>
 
     <a href="/" class="btn btn-primary btn-block" style="text-decoration:none;">
-      ← Continue Shopping
+      <i data-lucide="arrow-left"></i> Continue Shopping
     </a>
     <br />
-    <a href="/admin" style="display:block; margin-top:1rem; font-size:0.85rem; color: var(--text-muted); text-align:center;">
-      View in Admin Panel →
+    <a href="/admin" class="success-admin-link">
+      View in Admin Panel <i data-lucide="arrow-right"></i>
     </a>
   </div>
 </div>
@@ -43,7 +46,7 @@
 
   const details = document.getElementById('payment-details');
   const simBadge = isSimulated
-    ? `<div style="margin-top:1rem; margin-bottom:0.25rem; display:inline-block; background:rgba(67, 97, 238, 0.16); color:var(--accent-2); padding:0.25rem 0.7rem; border-radius:100px; font-size:0.72rem; font-weight:700; border:1px solid rgba(67, 97, 238, 0.3);">🧪 SIMULATED PAYMENT</div>`
+    ? `<div class="simulated-badge"><i data-lucide="flask-conical" style="width:.85em;height:.85em;vertical-align:-.1em;"></i> Simulated Payment</div>`
     : '';
 
   if (paymentId && orderId) {

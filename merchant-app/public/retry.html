@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Complete Your Purchase — TechZone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -25,21 +28,26 @@
 
     <!-- LEFT: Image + Product Info -->
     <div class="product-left">
+      <div class="retry-banner">
+        <i data-lucide="clock"></i>
+        <span>Your item is still waiting for you — pick up where you left off.</span>
+      </div>
       <div class="product-image-wrap">
         <img id="product-image" src="" alt="" />
       </div>
       <div class="product-info">
-        <div class="retry-banner" style="display:flex; align-items:center; gap:0.5rem; color:var(--warning); margin-bottom:1rem; font-weight:600;">
-          <i data-lucide="clock" style="color:var(--warning);"></i>
-          <span>Previous payment failed — complete your purchase below</span>
-        </div>
         <h1 id="product-name"></h1>
         <p class="description" id="product-description"></p>
         <div class="price" id="product-price"></div>
-        <div id="price-changed-notice" class="price-changed-notice" style="display:none; color:var(--warning); align-items:center; gap:0.5rem; margin-top:0.5rem; font-weight:500;">
+        <div id="price-changed-notice" class="price-change-notice" style="display:none;">
           <i data-lucide="info"></i> Price updated since your original order
         </div>
-        <div class="price-sub">+ free delivery · 1 year warranty · 7-day return policy</div>
+        <div class="price-sub">+ free delivery &middot; 1 year warranty &middot; 7-day return policy</div>
+        <div class="trust-badges">
+          <span class="trust-badge"><i data-lucide="shield-check"></i> Secure</span>
+          <span class="trust-badge"><i data-lucide="truck"></i> Free Delivery</span>
+          <span class="trust-badge"><i data-lucide="rotate-ccw"></i> 7-Day Return</span>
+        </div>
       </div>
     </div>
 
@@ -47,40 +55,42 @@
     <div class="product-right">
       <div class="checkout-card">
 
-        <div class="form-group">
-          <label><i data-lucide="user"></i> Shopping as</label>
-          <div id="customer-display" style="font-size:0.9rem; color:var(--text); padding:0.5rem 0;"></div>
-        </div>
+        <div class="checkout-card-title">Retry Payment</div>
 
-        <div class="form-group">
-          <label><i data-lucide="package"></i> Quantity</label>
-          <div id="quantity-display" style="font-size:0.9rem; color:var(--text); padding:0.5rem 0;"></div>
-        </div>
-
-        <div id="stock-warning" class="real-mode-notice" style="display:none; border-left-color:var(--danger); background:rgba(220,38,38,0.1); margin-bottom:1rem; padding:1rem; border-left: 3px solid var(--danger);">
-          <div style="display:flex; align-items:center; gap:0.5rem;">
-            <i data-lucide="alert-triangle" style="color:var(--danger);"></i>
-            <strong style="color:var(--danger);">Out of stock.</strong>
+        <div class="customer-badge" id="customer-badge-wrap" style="display:none;">
+          <div class="avatar" id="customer-avatar-initial"></div>
+          <div>
+            <div class="customer-name" id="customer-display"></div>
+            <div class="customer-status"><i data-lucide="check-circle-2"></i> Logged in</div>
           </div>
-          <div style="margin-top:0.5rem; font-size:0.9rem; color:var(--text);">This product is no longer available in the quantity you ordered.</div>
         </div>
 
-        <!-- ═══════ SIMULATE MODE UI ═══════ -->
+        <div class="form-group" style="margin-bottom:.75rem;">
+          <label style="font-size:.78rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"><i data-lucide="package"></i> Quantity</label>
+          <div id="quantity-display" style="font-size:.9rem;color:var(--text);padding:.35rem 0;"></div>
+        </div>
+
+        <div id="stock-warning" class="stock-warning" style="display:none;">
+          <i data-lucide="alert-triangle"></i>
+          <div><strong>Out of stock.</strong> This product is no longer available in the quantity you ordered.</div>
+        </div>
+
+        <!-- SIMULATE MODE UI -->
         <div id="simulate-ui">
           <div class="form-group">
-            <label><i data-lucide="target"></i> Payment Outcome</label>
-            <div class="segmented-control" id="outcome-toggle">
-              <button type="button" class="segment outcome-success active" data-outcome="success">
+            <label style="font-size:.82rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;"><i data-lucide="target"></i> Payment Outcome</label>
+            <div class="segmented-control" id="outcome-toggle" style="width:100%;">
+              <button type="button" class="segment outcome-success active" data-outcome="success" style="flex:1;">
                 <i data-lucide="check-circle"></i> Successful
               </button>
-              <button type="button" class="segment outcome-fail" data-outcome="fail">
+              <button type="button" class="segment outcome-fail" data-outcome="fail" style="flex:1;">
                 <i data-lucide="x-circle"></i> Failed
               </button>
             </div>
           </div>
 
           <div class="form-group" id="scenario-group" style="display:none;">
-            <label for="scenario-select"><i data-lucide="alert-triangle"></i> Failure Scenario</label>
+            <label style="font-size:.82rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;" for="scenario-select"><i data-lucide="alert-triangle"></i> Failure Scenario</label>
             <select id="scenario-select">
               <option value="">Loading scenarios…</option>
             </select>
@@ -92,17 +102,20 @@
           </button>
         </div>
 
-        <div style="margin-top:1rem; font-size:0.78rem; color: var(--text-muted); text-align:center; display:flex; justify-content:center; align-items:center; gap:0.5rem;">
-          <i data-lucide="shield-check" style="width:1rem; height:1rem;"></i> Secure · Same order · No duplicate charge
+        <div style="margin-top:1rem;font-size:.75rem;color:var(--text-dim);text-align:center;display:flex;align-items:center;justify-content:center;gap:.35rem;">
+          <i data-lucide="shield-check"></i> Secure &middot; Same order &middot; No duplicate charge
         </div>
       </div>
     </div>
   </div>
 
-  <div id="error-state" style="display:none; text-align:center; padding:4rem 2rem;">
-    <i data-lucide="alert-circle" style="width:3rem;height:3rem;color:var(--danger);margin-bottom:1rem;"></i>
-    <h2 id="error-message">Order not found</h2>
-    <a href="/" class="btn btn-primary" style="margin-top:1.5rem; display:inline-block;">Browse Store</a>
+  <div id="error-state" style="display:none;text-align:center;padding:5rem 2rem;">
+    <div style="width:56px;height:56px;background:var(--danger-light);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
+      <i data-lucide="alert-circle" style="color:var(--danger);width:1.5rem;height:1.5rem;"></i>
+    </div>
+    <h2 id="error-message" style="font-family:var(--font-display);font-weight:400;font-size:1.4rem;margin-bottom:.5rem;"></h2>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;">Please browse the store for other great products.</p>
+    <a href="/" class="btn btn-primary">Browse Store</a>
   </div>
 </div>
 
@@ -116,17 +129,13 @@
   async function loadOrder() {
     if (!token) return showError('No retry token in URL.');
 
-    // Auto-login the customer associated with this retry token
-    // This establishes a proper session so the customer is authenticated
     try {
       await fetch('/api/auth/token-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-    } catch (e) {
-      // Non-fatal — login may already exist
-    }
+    } catch (e) {}
 
     const [orderRes, scenariosRes] = await Promise.all([
       fetch(`/api/orders/retry/${token}`),
@@ -141,7 +150,6 @@
     failureScenarios = scenarios;
     orderData = orderJson.data;
 
-    // Populate UI
     const d = orderData;
     document.getElementById('product-image').src = d.product.imageUrl;
     document.getElementById('product-image').alt = d.product.name;
@@ -150,37 +158,34 @@
     document.getElementById('product-price').textContent =
       '₹' + (d.currentTotal / 100).toLocaleString('en-IN');
 
-    // Show authenticated customer name with a welcome banner
-    const customerEl = document.getElementById('customer-display');
-    customerEl.innerHTML = `<strong>${d.customer.name}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(${d.customer.email})</span>
-      <span style="margin-left:0.5rem; background:rgba(99,102,241,0.12); color:var(--accent); border-radius:12px; padding:0.1rem 0.5rem; font-size:0.72rem; font-weight:600;">✓ Logged in</span>`;
+    const badgeWrap = document.getElementById('customer-badge-wrap');
+    const avatarEl = document.getElementById('customer-avatar-initial');
+    const nameEl = document.getElementById('customer-display');
+    avatarEl.textContent = d.customer.name.charAt(0).toUpperCase();
+    nameEl.textContent = d.customer.name + ' (' + d.customer.email + ')';
+    badgeWrap.style.display = 'flex';
 
     document.getElementById('quantity-display').textContent =
       `${d.quantity} unit${d.quantity > 1 ? 's' : ''}`;
 
-    // Show offer badge on retry page if product has an active offer
     if (d.product.offers) {
       const offerEl = document.createElement('div');
       offerEl.className = 'offer-badge';
-      offerEl.style.marginTop = '0.75rem';
-      offerEl.textContent = '🎁 ' + d.product.offers;
+      offerEl.textContent = d.product.offers;
       document.getElementById('product-price').after(offerEl);
     }
 
-    // Show price change notice if price differs
     if (d.originalAmount !== d.currentTotal) {
       document.getElementById('price-changed-notice').style.display = 'flex';
     }
 
-    // Stock check
     if (!d.stockAvailable) {
-      document.getElementById('stock-warning').style.display = 'block';
+      document.getElementById('stock-warning').style.display = 'flex';
       document.getElementById('retry-btn').disabled = true;
     } else {
       document.getElementById('retry-btn').disabled = false;
     }
 
-    // Populate scenario select
     const scenarioSelect = document.getElementById('scenario-select');
     scenarioSelect.innerHTML = failureScenarios.map(s =>
       `<option value="${s.key}" data-method="${s.method}" data-desc="${s.description}" data-recovery="${s.expectedRecovery}">${s.label} (${s.method.toUpperCase()})</option>`
@@ -199,7 +204,6 @@
     lucide.createIcons();
   }
 
-  // ── Outcome toggle ─────────────────────────────────────────────────────────
   document.getElementById('outcome-toggle').addEventListener('click', e => {
     const btn = e.target.closest('.segment');
     if (!btn) return;
@@ -223,9 +227,9 @@
     const preview = document.getElementById('scenario-preview');
     if (opt && opt.value) {
       preview.innerHTML = `
-        <div style="margin-bottom:0.25rem;"><span style="color:var(--text-muted);font-weight:500;">Method:</span> ${(opt.dataset.method || '').toUpperCase()}</div>
-        <div style="margin-bottom:0.25rem;"><span style="color:var(--text-muted);font-weight:500;">What happens:</span> ${opt.dataset.desc || '—'}</div>
-        <div><span style="color:var(--text-muted);font-weight:500;">Expected recovery:</span> <code style="background:var(--surface-3);padding:0.2rem 0.4rem;border-radius:4px;">${opt.dataset.recovery || '—'}</code></div>
+        <div><span style="font-weight:600;color:var(--text);">Method:</span> ${(opt.dataset.method || '').toUpperCase()}</div>
+        <div><span style="font-weight:600;color:var(--text);">What happens:</span> ${opt.dataset.desc || '—'}</div>
+        <div><span style="font-weight:600;color:var(--text);">Expected recovery:</span> <code style="background:var(--surface);padding:.15rem .4rem;border-radius:4px;font-size:.8em;">${opt.dataset.recovery || '—'}</code></div>
       `;
     }
   }
@@ -237,7 +241,6 @@
     document.getElementById('retry-btn').disabled = !ok;
   }
 
-  // ── Retry button ──────────────────────────────────────────────────────────
   document.getElementById('retry-btn').addEventListener('click', async () => {
     const btn = document.getElementById('retry-btn');
     const originalHTML = btn.innerHTML;
@@ -248,7 +251,6 @@
     const scenarioKey = document.getElementById('scenario-select').value;
 
     try {
-      // Call simulate checkout — the server will reuse the same open order
       const res = await fetch('/api/checkout/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -269,22 +271,11 @@
         return;
       }
 
-      // Failure — show toast and re-enable
       const msg = data.recoveryDecision?.message || `Payment failed: ${data.scenario?.label}`;
-      showToastHTML(`
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;color:#f87171;">
-          <i data-lucide="x-circle" style="width:1.25rem;height:1.25rem;"></i>
-          <strong>Payment Failed Again</strong>
-        </div>
-        <div style="font-weight:400;line-height:1.4;">${msg}</div>
-      `, 'error', 6000);
+      showToastHTML(`<i data-lucide="x-circle"></i> <strong>Payment Failed Again</strong> — ${msg}`, 'error', 6000);
 
     } catch (err) {
-      showToastHTML(`
-        <div style="display:flex;align-items:center;gap:0.5rem;color:#f87171;">
-          <i data-lucide="alert-circle"></i> <b>Error:</b> ${err.message}
-        </div>
-      `, 'error');
+      showToastHTML(`<i data-lucide="alert-circle"></i> <b>Error:</b> ${err.message}`, 'error');
     } finally {
       btn.innerHTML = originalHTML;
       btn.disabled = false;

@@ -205,7 +205,7 @@ class AnalyticsController {
     try {
       const events = await prisma.failureEvent.findMany({
         include: {
-          recoveryActions: true,
+          recoveryActions: { orderBy: { executedAt: "asc" } },
           payment: {
             include: {
               order: {
@@ -217,36 +217,59 @@ class AnalyticsController {
             },
           },
         },
+        orderBy: { detectedAt: "desc" },
       });
 
-      const byCustomer: Record<string, { failureCount: number; atRiskPaise: number; lastFailureAt: Date }> = {};
+      const byCustomer: Record<string, {
+        failureCount: number;
+        atRiskPaise: number;
+        lastFailureAt: Date;
+        recoveryHours: number[];   // hours taken to recover per event
+      }> = {};
 
       for (const e of events) {
         const cid = e.payment?.order?.customer?.id;
-        const pid = e.payment?.order?.product?.id;
+        const orderId = e.payment?.order?.id;
         if (!cid) continue;
 
-        if (!byCustomer[cid]) byCustomer[cid] = { failureCount: 0, atRiskPaise: 0, lastFailureAt: e.detectedAt };
+        if (!byCustomer[cid]) {
+          byCustomer[cid] = { failureCount: 0, atRiskPaise: 0, lastFailureAt: e.detectedAt, recoveryHours: [] };
+        }
         byCustomer[cid].failureCount++;
         if (e.detectedAt > byCustomer[cid].lastFailureAt) byCustomer[cid].lastFailureAt = e.detectedAt;
 
-        // Only add to at-risk if the customer has NOT repurchased this product after failure
-        let isConfirmedRecovery = false;
-        if (pid && e.recoveryActions.length > 0) {
-          const repurchase = await prisma.order.findFirst({
-            where: {
-              id: e.payment?.order?.id,
-              status: "paid",
-            },
-            select: { id: true },
+        // Check if this order was eventually recovered (paid)
+        let isRecovered = false;
+        if (orderId) {
+          const paidOrder = await prisma.order.findFirst({
+            where: { id: orderId, status: "paid" },
+            select: { updatedAt: true },
           });
-          isConfirmedRecovery = !!repurchase;
+          if (paidOrder) {
+            isRecovered = true;
+            const hoursToRecover = (paidOrder.updatedAt.getTime() - e.detectedAt.getTime()) / 3600000;
+            byCustomer[cid].recoveryHours.push(hoursToRecover);
+          }
         }
-        if (!isConfirmedRecovery) byCustomer[cid].atRiskPaise += e.payment?.order?.amount ?? 0;
+
+        if (!isRecovered) byCustomer[cid].atRiskPaise += e.payment?.order?.amount ?? 0;
       }
 
       const data = Object.values(byCustomer)
-        .sort((a, b) => b.failureCount - a.failureCount)
+        .map((c) => {
+          const avgHoursToRecover = c.recoveryHours.length > 0
+            ? c.recoveryHours.reduce((s, h) => s + h, 0) / c.recoveryHours.length
+            : null;
+          return { ...c, avgHoursToRecover };
+        })
+        // Primary: most failures first. Secondary: slowest to recover (higher risk).
+        // Unrecovered customers (null avgHours) get penalty of Infinity to sort last within same failureCount.
+        .sort((a, b) => {
+          if (b.failureCount !== a.failureCount) return b.failureCount - a.failureCount;
+          const aH = a.avgHoursToRecover ?? Infinity;
+          const bH = b.avgHoursToRecover ?? Infinity;
+          return bH - aH;
+        })
         .slice(0, 20)
         .map((c, i) => ({
           rank: i + 1,
@@ -254,7 +277,9 @@ class AnalyticsController {
           failureCount: c.failureCount,
           totalAtRiskPaise: c.atRiskPaise,
           lastFailureAt: c.lastFailureAt.toISOString(),
+          avgHoursToRecover: c.avgHoursToRecover != null ? parseFloat(c.avgHoursToRecover.toFixed(1)) : null,
         }));
+
       res.json({ success: true, data });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
