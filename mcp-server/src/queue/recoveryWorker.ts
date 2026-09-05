@@ -155,9 +155,9 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
                 product_name: args.product_name,
                 amount_rupees: args.amount,
                 currency: "INR",
-                product_offer: args.product_offer || context.order_details?.product_offer ?? undefined,
+                product_offer: args.product_offer || context.order_details?.product_offer || undefined,
               }
-            : context.order_details ? { ...context.order_details, product_offer: args.product_offer || context.order_details.product_offer ?? undefined } : null;
+            : context.order_details ? { ...context.order_details, product_offer: args.product_offer || context.order_details.product_offer || undefined } : null;
 
         const copy = await runNotificationWriterAgent({
           failureCategory: context.failure_category,
