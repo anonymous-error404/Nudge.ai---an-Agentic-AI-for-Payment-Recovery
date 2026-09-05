@@ -24,60 +24,11 @@ To showcase the system in action, we built **TechZone** — a fully functioning 
 
 The core innovation of Nudge.ai is its **strict trust boundary** between the AI brain and the merchant's sensitive data.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                  MERCHANT APP (TechZone)                 │
-│            Port 3000 — The MCP Client                    │
-│                                                          │
-│  ┌──────────┐   ┌──────────────┐   ┌──────────────────┐ │
-│  │ TechZone │   │  MCP Client  │   │   Local Tools    │ │
-│  │Storefront│   │   Service    │   │ (Email, SMS, DB) │ │
-│  └────┬─────┘   └──────┬───────┘   └────────┬─────────┘ │
-│       │                │                     │           │
-└───────┼────────────────┼─────────────────────┼───────────┘
-        │ Payment Fails   │ Anonymized Context  │Tool Results
-        ▼                ▼                     ▲
-┌─────────────────────────────────────────────────────────┐
-│                MCP SERVER (AI Brain)                     │
-│            Port 3001 — Zero PII Access                   │
-│                                                          │
-│  ┌──────────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │ The Concierge│  │  BullMQ  │  │  The Strategist  │   │
-│  │(Instant UI)  │  │  Queue   │  │  (Decisions)     │   │
-│  └──────────────┘  └────┬─────┘  └──────────────────┘   │
-│                         │                                │
-│  ┌──────────────┐  ┌────▼─────┐  ┌──────────────────┐   │
-│  │ The Wordsmith│  │  Redis   │  │   The Tracker    │   │
-│  │  (Copy)      │  │          │  │ (Cron Follow-up) │   │
-│  └──────────────┘  └──────────┘  └──────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-```
+![System Architecture](./docs/Nudge.ai%20System%20Architecture.png)
 
 ### The MCP Flow — Step by Step
 
-```mermaid
-sequenceDiagram
-    participant U as Customer
-    participant M as TechZone (Merchant App)
-    participant S as Nudge.ai MCP Server
-    participant Q as Redis / BullMQ
-    participant L as LLM (Groq)
-
-    U->>M: Payment fails at checkout
-    M->>M: 🎩 The Concierge fires instantly
-    M->>U: Warm UI message shown on checkout page
-    M->>S: POST /api/recovery-jobs (Anonymized Context — no PII)
-    S->>Q: Enqueue async recovery job
-    Q-->>S: Worker picks up the job
-    S->>L: 🧠 The Strategist — analyze failure & choose tool
-    L-->>S: Tool call: send_notification
-    S->>L: ✍️ The Wordsmith — draft notification copy
-    L-->>S: Subject + body crafted
-    S->>M: POST /mcp/tool-call (relay tool to merchant)
-    M->>U: Send real email/SMS via SMTP
-    M->>S: POST /api/tool-results (execution result)
-    Note over S,Q: 🕵️ The Tracker schedules follow-ups via cron
-```
+![System Flow](./docs/Payment%20Failure%20to%20Recovery%20%E2%80%94%20Full%20Data%20Flow.png)
 
 ---
 
