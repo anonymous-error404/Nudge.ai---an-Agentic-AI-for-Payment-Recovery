@@ -1,15 +1,8 @@
-/**
- * Tool Registry
- *
- * Centralises:
- *  1. The JSON schemas sent to the MCP server (and on to AI)
- *  2. The executor functions called when the server relays a tool call back
- */
-
-import { sendNotificationSchema, executeSendNotification } from "./sendNotificationTool";
+﻿import { sendNotificationSchema, executeSendNotification } from "./sendNotificationTool";
 import { queryFailureContextSchema, executeQueryFailureContext } from "./queryFailureContextTool";
 import { escalateToHumanSchema, executeEscalateToHuman } from "./escalateToHumanTool";
 import { doNothingSchema, executeDoNothing } from "./doNothingTool";
+import { log } from '../../../../shared/logger';
 
 // ─── Schemas sent to MCP server (these become AI's tool list) ─────────────
 
@@ -41,9 +34,9 @@ export async function executeTool(toolName: string, args: ToolArgs): Promise<Too
   if (!executor) {
     throw new Error(`Unknown tool: ${toolName}. Registered: ${Object.keys(TOOL_EXECUTORS).join(", ")}`);
   }
-  console.log(`🔧 Executing tool: ${toolName}`, args);
+  log.toolOrdered(toolName, args);
   const result = await executor(args);
-  console.log(`✅ Tool result [${toolName}]:`, result);
+  log.toolResult(toolName, result);
   return result;
 }
 

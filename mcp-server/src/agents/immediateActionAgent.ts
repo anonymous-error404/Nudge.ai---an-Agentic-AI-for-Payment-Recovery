@@ -1,5 +1,6 @@
-import Groq from "groq-sdk";
+﻿import Groq from "groq-sdk";
 import { FailureContext, ToolSchema } from "../types";
+import { log } from '../../../shared/logger';
 
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const MODEL = "openai/gpt-oss-120b";
@@ -62,19 +63,18 @@ Product: ${context.order_details?.product_name || "unknown"}`,
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       for (const toolCall of msg.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments || "{}");
-        console.log(
-          `🤖 ImmediateActionAgent calling tool: ${toolCall.function.name}`,
-          args,
-        );
+        log.toolOrdered(`[The Strategist] ${toolCall.function.name}`, args);
 
         try {
           const result = await onToolCall(toolCall.function.name, args);
+          log.toolResult(toolCall.function.name, result);
           messages.push({
             role: "tool",
             tool_call_id: toolCall.id,
             content: JSON.stringify(result),
           });
         } catch (err) {
+          log.error(`Tool "${toolCall.function.name}" execution failed`, err);
           messages.push({
             role: "tool",
             tool_call_id: toolCall.id,

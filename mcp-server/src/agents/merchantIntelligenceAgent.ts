@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import { log } from "../../../shared/logger";
 
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const MODEL = "openai/gpt-oss-120b";
@@ -79,10 +80,7 @@ export async function runMerchantIntelligenceAgent({
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       for (const toolCall of msg.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments || "{}");
-        console.log(
-          `\ud83d\udd0d MerchantIntelligenceAgent calling tool: ${toolCall.function.name}`,
-          args,
-        );
+        log.toolOrdered(`[The Analyst] ${toolCall.function.name}`, args);
         toolCallCount++;
 
         let result: any;
@@ -102,9 +100,7 @@ export async function runMerchantIntelligenceAgent({
       // If we have exhausted the max tool calls, inject a forcing message
       // and let the next iteration return a text response without tools
       if (toolCallCount >= MAX_TOOL_CALLS) {
-        console.warn(
-          `\u26a0\ufe0f  MerchantIntelligenceAgent reached max tool calls (${MAX_TOOL_CALLS}). Forcing final answer.`,
-        );
+        log.warn(`[The Analyst] Max tool calls reached (${MAX_TOOL_CALLS}). Forcing final answer.`);
         messages.push({
           role: "user",
           content:

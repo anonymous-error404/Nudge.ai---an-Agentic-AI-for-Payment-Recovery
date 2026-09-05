@@ -1,4 +1,4 @@
-import { Worker, Job } from "bullmq";
+﻿import { Worker, Job } from "bullmq";
 import { recoveryQueue, redisConnection } from "./jobQueue";
 import { RecoveryJobPayload } from "../types";
 import { recoveryActionRepo } from "../repositories/recoveryActionRepo";
@@ -7,6 +7,7 @@ import { runFollowUpAgent } from "../agents/followUpAgent";
 import { runImmediateActionAgent } from "../agents/immediateActionAgent";
 import { runNotificationWriterAgent } from "../agents/notificationWriterAgent";
 import { prisma } from "../lib/prismaClient";
+import { log, toIST } from '../../../shared/logger';
 
 /**
  * ─── TOOL RELAY ──────────────────────────────────────────────────────────────
@@ -51,19 +52,26 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
 
   if (toolSchemas.length === 0) {
     try {
-      console.log(`fetching tools from ${merchantCallbackUrl}/tools`);
+      log.info("🔌", `Fetching available tools from MCP Client at ${merchantCallbackUrl}/tools`);
       const res = await fetch(`${merchantCallbackUrl}/tools`);
       if (res.ok) {
         const json = (await res.json()) as any;
         toolSchemas = json.schemas || [];
+        log.step(`Loaded ${toolSchemas.length} tool(s) from MCP Client`);
       }
     } catch (e) {
-      console.error("Failed to fetch tool schemas from merchant:", e);
+      log.error("Could not fetch tool schemas from MCP Client", e);
     }
   }
 
-  console.log(
-    `\n⚙️  Processing recovery job: ${jobId} | isFollowUp=${!!isFollowUp} | isImmediate=${!!isImmediateRecovery} | category=${context.failure_category}`,
+  log.section(
+    isImmediateRecovery ? "⚡" : "🔄",
+    isImmediateRecovery
+      ? `New immediate recovery job started`
+      : isFollowUp
+        ? `Follow-up recovery job started`
+        : `Recovery job started`,
+    `category="${context.failure_category}" | jobId=${jobId}`,
   );
 
   try {
@@ -125,16 +133,15 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
             nextExecutionAt,
           },
         });
+        log.scheduled("Follow-up job scheduled by AI agent", nextExecutionAt);
         return {
           success: true,
-          message: `Scheduled next follow-up at ${nextExecutionAt.toISOString()}`,
+          message: `Next follow-up scheduled at ${toIST(nextExecutionAt)} (IST)`,
         };
       }
 
       if (tool === "draft_notification_copy") {
-        console.log(
-          `🤖 Delegating copy drafting to NotificationWriterAgent for channel: ${args.channel}`,
-        );
+        log.info("✍️", `Calling Notification Writer Agent to draft ${args.channel.toUpperCase()} copy for customer "${args.customer_name || context.customer_name}"`);
 
         // Use the args provided by the AI if available, otherwise fallback to stale job context
         const orderDetails =
@@ -154,6 +161,7 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
           customerName: args.customer_name || context.customer_name,
           orderDetails: orderDetails,
         });
+        log.step(`Notification copy drafted — subject: "${copy.subject || "(SMS)"}"`);
         return { success: true, subject: copy.subject, body: copy.body };
       }
 
@@ -179,7 +187,7 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
         outcome: RecoveryOutcome.Success,
         agentReasoning: "Immediate recovery tools executed",
       });
-      console.log(`✅ Immediate recovery job ${jobId} complete.`);
+      log.success(`Immediate recovery job complete — jobId=${jobId}`);
       return;
     }
 
@@ -192,9 +200,9 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
           merchantId,
           failureEventId,
           jobId,
-          attemptNumber: 1, // Follow-up is technically a subsequent attempt, but 1 is fine for the log
+          attemptNumber: 1,
         })
-        .catch((e) => console.warn("Action already exists:", e));
+        .catch((e) => log.warn(`Could not create action record: ${e}`));
       await recoveryActionRepo.markInProgress(jobId).catch(() => {});
 
       let lastActionTaken = "do_nothing";
@@ -229,26 +237,25 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
           outcome: RecoveryOutcome.Success,
           agentReasoning: agentReasoningContext,
         })
-        .catch((e) => console.warn("Failed to mark action complete:", e));
+        .catch((e) => log.warn(`Could not mark action complete: ${e}`));
 
-      console.log(`✅ Follow-up job ${jobId} complete.`);
+      log.success(`Follow-up recovery job complete — jobId=${jobId}`);
       return;
     }
 
-    console.log(
-      `Job ${jobId} is not a follow-up or immediate. Unknown format.`,
-    );
+    log.warn(`Job ${jobId} format unrecognised — not a follow-up or immediate job.`);
   } catch (err) {
-    console.error(`❌ Job ${jobId} failed:`, err);
+    log.error(`Recovery job failed — jobId=${jobId}`, err);
     if (isFollowUp && followUpScheduleId) {
+      const rescheduleAt = new Date(Date.now() + 5 * 60000);
       await prisma.followUpSchedule.update({
         where: { id: followUpScheduleId },
         data: {
           status: "PENDING",
-          nextExecutionAt: new Date(Date.now() + 5 * 60000),
+          nextExecutionAt: rescheduleAt,
         },
       });
-      console.log(`Rescheduled failed follow-up job to run in 5 minutes.`);
+      log.scheduled("Failed follow-up rescheduled for retry", rescheduleAt);
     }
   }
 }
@@ -263,10 +270,10 @@ export function startRecoveryWorker() {
     },
   );
   worker.on("completed", (job) =>
-    console.log(`✅ BullMQ job ${job.id} completed`),
+    log.success(`BullMQ job ${job.id} processed successfully`),
   );
   worker.on("failed", (job, err) =>
-    console.log(`❌ BullMQ job ${job?.id} failed: ${err}`),
+    log.error(`BullMQ job ${job?.id} failed`, err),
   );
 }
 

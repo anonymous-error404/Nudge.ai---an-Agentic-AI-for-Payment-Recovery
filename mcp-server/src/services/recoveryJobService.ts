@@ -50,7 +50,10 @@ class RecoveryJobService {
     });
 
     console.log(
-      `📥 Instant checkout UI returned for ${payload.externalRef}. Queued immediate recovery job ${job.id}.`,
+      `\n⚡  MCP Server: Checkout UI message generated instantly for event ${payload.externalRef}`
+    );
+    console.log(
+      `   Async recovery job queued → jobId=${job.id}`
     );
 
     return {

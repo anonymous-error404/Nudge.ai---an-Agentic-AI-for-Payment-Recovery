@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { NotificationChannel } from "../enums";
+import { log } from "../../../shared/logger";
 
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -66,7 +67,7 @@ export interface NotificationContent {
 }
 
 /**
- * Agent 3 — Notification Writer Agent.
+ * Agent 3 — The Wordsmith.
  * Called by the worker AFTER Agent 1 decides send_notification.
  * Generates channel-appropriate copy for the notification.
  */
@@ -140,11 +141,13 @@ Return only the message content. No explanations, no meta-commentary.`;
 
   const rawText = (response.choices[0].message.content ?? "").trim();
 
-  // Debug: log finish_reason and raw content length to understand model behaviour
-  console.log(`🔍 Agent 3 raw response | finish_reason=${response.choices[0].finish_reason} | content_length=${rawText.length} | preview="${rawText.slice(0, 80)}"`);
+  log.info("✍️ ", `[The Wordsmith] Copy drafted`);
+  log.step(`Channel:  ${channel.toUpperCase()}`);
+  log.step(`Customer: ${customerName.split(" ")[0]}`);
+  log.step(`Preview:  "${rawText.slice(0, 80)}${rawText.length > 80 ? "…" : ""}"`);
 
   if (!rawText) {
-    console.warn(`⚠️  Agent 3 returned empty content for channel=${channel}. Using fallback template.`);
+    log.warn(`[The Wordsmith] Returned empty content for channel=${channel}. Using fallback.`);
     return getFallbackContent(failureCategory, channel);
   }
 

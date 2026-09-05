@@ -109,7 +109,10 @@ class MCPClient {
 
     try {
       console.log(
-        `📡 Sending failure context to MCP Server: event=${failureEventId}`,
+        `\n📡  MCP Client → MCP Server: Sending anonymised failure context`
+      );
+      console.log(
+        `   Event: ${failureEventId} | Category: ${context.failure_category} | Amount bucket: ${context.amount_bucket}`
       );
       const response = await fetch(`${MCP_SERVER_URL}/api/recovery-jobs`, {
         method: "POST",
@@ -126,7 +129,7 @@ class MCPClient {
       const data = await response.json();
       return data as any;
     } catch (error) {
-      console.error("❌ Failed to submit recovery job to MCP:", error);
+      console.error("\n❌  MCP Client failed to reach MCP Server:", error);
       return {};
     }
   }

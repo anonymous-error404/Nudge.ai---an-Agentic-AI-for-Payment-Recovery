@@ -51,21 +51,24 @@ class EmailService {
         html: htmlContent,
       });
 
-      console.log(`\n========================================================`);
-      console.log(`📧 EMAIL SENT TO: ${to}`);
-      console.log(`SUBJECT: ${subject}`);
+      console.log(`\n${"─".repeat(56)}`);
+      console.log(`📧  EMAIL DISPATCHED`);
+      console.log(`    To:      ${to}`);
+      console.log(`    Subject: ${subject}`);
       if (this.isEthereal) {
         const previewUrl = nodemailer.getTestMessageUrl(info);
-        console.log(`PREVIEW URL: ${previewUrl}`);
-        console.log(`========================================================\n`);
-        return { success: true, previewUrl, messageId: info.messageId };
+        console.log(`    Preview: ${previewUrl}`);
       } else {
-        console.log(`MESSAGE ID: ${info.messageId}`);
-        console.log(`========================================================\n`);
-        return { success: true, messageId: info.messageId };
+        console.log(`    Message ID: ${info.messageId}`);
       }
+      console.log(`${"─".repeat(56)}\n`);
+
+      return this.isEthereal
+        ? { success: true, previewUrl: nodemailer.getTestMessageUrl(info), messageId: info.messageId }
+        : { success: true, messageId: info.messageId };
+
     } catch (error) {
-      console.error("Failed to send email:", error);
+      console.error("\n❌  Email dispatch failed:", error);
       return { success: false, error: String(error) };
     }
   }

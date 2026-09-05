@@ -1,4 +1,4 @@
-/**
+﻿/**
  * send_notification tool
  * Mock implementation — logs to console and returns success.
  * Replace with real SMS/email provider (Twilio, SendGrid, etc.) when going live.
@@ -9,6 +9,7 @@
 
 import { prisma } from "../../../src/lib/prismaClient";
 import { emailService } from "../../../src/services/emailService";
+import { log } from '../../../../shared/logger';
 
 export const sendNotificationSchema = {
   type: "function" as const,
@@ -84,8 +85,7 @@ export async function executeSendNotification(args: {
       retryUrl = `${BASE_URL}/retry?token=${latestFailedOrder.retryToken}`;
     }
   } catch (e) {
-    // Non-fatal — proceed without retry URL
-    console.warn("⚠️  Could not build retry URL:", (e as Error).message);
+    log.warn(`Could not build retry URL: ${(e as Error).message}`);
   }
 
   // ── Append retry URL to notification body if we have one ─────────────────
@@ -99,20 +99,17 @@ export async function executeSendNotification(args: {
   let successMsg = `Notification sent via ${args.channel} (mock)`;
 
   if (args.channel === "email") {
-    console.log(`\n📬 Sending REAL test email via Nodemailer (Ethereal) to ${customer.email}...`);
+    log.info("📬", `Sending recovery email to ${customer.email} via SMTP...`);
     const subject = args.subject || "Payment Failed - Action Required";
     const result = await emailService.sendEmail(customer.email, subject, htmlBody);
-    
+
     if (result.success) {
-      successMsg = `Real email sent successfully. Preview URL: ${result.previewUrl}`;
+      successMsg = `Email sent successfully. Preview URL: ${result.previewUrl}`;
     } else {
       successMsg = `Failed to send email: ${result.error}`;
     }
   } else if (args.channel === "sms" || args.channel === "whatsapp") {
-    console.log(`\n📱 Sending MOCK ${args.channel.toUpperCase()} to ${customer.name}:`);
-    console.log(`--------------------------------------------------------`);
-    console.log(body);
-    console.log(`--------------------------------------------------------`);
+    log.notificationSent(args.channel, customer.name, body.slice(0, 100));
     successMsg = `Mock ${args.channel.toUpperCase()} logged to console successfully.`;
   }
 

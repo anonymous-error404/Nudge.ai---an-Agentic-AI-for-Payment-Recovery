@@ -10,7 +10,7 @@ class WebhookService {
     event: RazorpayWebhookEvent,
   ): Promise<{ uiMessage?: string }> {
     const eventType = event.event;
-    console.log(`📨 Webhook received: ${eventType}`);
+    console.log(`\n📨  Razorpay webhook received: "${eventType}"`);
 
     try {
       switch (eventType) {
@@ -26,10 +26,10 @@ class WebhookService {
           await this.handleOrderPaid(event);
           break;
         default:
-          console.log(`ℹ️  Unhandled event type: ${eventType}`);
+          console.log(`   ↳ Event type "${eventType}" is not handled — ignoring.`);
       }
     } catch (err) {
-      console.error(`❌ Error processing webhook event ${eventType}:`, err);
+      console.error(`\n❌  Error while processing webhook event "${eventType}":`, err);
     }
     return {};
   }
@@ -47,7 +47,7 @@ class WebhookService {
 
     if (!order) {
       console.warn(
-        `⚠️  No local order found for razorpay_order_id: ${razorpayOrderId}`,
+        `\n⚠️   Payment failed but no matching local order found for razorpay_order_id: ${razorpayOrderId}`,
       );
       return {};
     }
@@ -85,19 +85,22 @@ class WebhookService {
       });
 
     if (isNew && failureEvent) {
+      console.log(
+        `\n💥  Payment failure detected — handing off to Recovery Orchestrator`
+      );
+      console.log(
+        `   Payment: ${payload.id} | Category: ${category} | Order: ${order.id}`
+      );
       // Await the orchestrator — its uiMessage travels back through the webhook response
       const decision = await handlePaymentFailure(
         failureEvent.id,
         category,
         payment.id,
       );
-      console.log(
-        `💥 Webhook: payment failed + orchestrator invoked: payment=${payload.id} | category=${category} | order=${order.id}`,
-      );
       return { uiMessage: decision.uiMessage };
     } else {
       console.log(
-        `💥 Webhook: payment failed (duplicate — already handled): payment=${payload.id} | category=${category}`,
+        `\n⏭️   Payment failure already handled (duplicate event) — skipping. Payment: ${payload.id}`,
       );
       return {};
     }
@@ -121,7 +124,7 @@ class WebhookService {
       });
     }
 
-    console.log(`✅ Payment authorized: ${payload.id}`);
+    console.log(`\n✅  Payment authorised by bank — payment ID: ${payload.id}`);
   }
 
   private async handlePaymentCaptured(event: RazorpayWebhookEvent) {
@@ -140,15 +143,15 @@ class WebhookService {
     });
 
     // Mark corresponding failure events as resolved
-    await import("../lib/prismaClient").then(({ prisma }) => 
+    await import("../lib/prismaClient").then(({ prisma }) =>
       prisma.failureEvent.updateMany({
         where: { payment: { orderId: order.id } },
         data: { status: "resolved" }
-      }).catch(e => console.warn("Failed to update failure event status:", e.message))
+      }).catch(e => console.warn(`\n⚠️   Could not mark failure event resolved: ${e.message}`))
     );
 
     console.log(
-      `💰 Payment captured: ${payload.id} — order ${order.id} marked paid`,
+      `\n💰  Payment captured successfully — payment: ${payload.id} | order: ${order.id} is now PAID`,
     );
   }
 
@@ -157,7 +160,7 @@ class WebhookService {
     if (!orderPayload) return;
 
     await orderRepository.updateStatusByRazorpayId(orderPayload.id, "paid");
-    console.log(`📦 Order paid: razorpay_order_id=${orderPayload.id}`);
+    console.log(`\n📦  Order marked as paid — razorpay_order_id: ${orderPayload.id}`);
   }
 }
 

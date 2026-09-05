@@ -1,7 +1,8 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { executeTool, TOOL_SCHEMAS } from "./tools";
 import { failureEventRepository } from "../../src/repositories/failureEventRepository";
 import { RecoveryOutcome, RecoveryActionType } from "../../src/enums";
+import { log } from '../../../shared/logger';
 
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL ?? "http://localhost:3001";
 
@@ -42,9 +43,7 @@ class McpCallbackController {
               select: { id: true },
             });
             if (!eventExists) {
-              console.warn(
-                `⚠️  Skipping RecoveryAction log — FailureEvent ${failureEventId} not found in DB (stale job?)`
-              );
+              log.warn(`Skipping action log — failure event ${failureEventId} not found in DB (may be a stale follow-up job)`);
               return;
             }
 
@@ -82,13 +81,13 @@ class McpCallbackController {
             });
           })
           .catch((e) =>
-            console.warn("Failed to log recovery action in merchant DB:", e),
+            log.warn(`Could not save recovery action to merchant DB: ${e}`),
           );
       }
 
       return res.status(200).json({ success: true, data: result });
     } catch (err) {
-      console.error(`❌ Tool execution failed [${tool}]:`, err);
+      log.error(`MCP Client failed to execute tool "${tool}"`, err);
       return res.status(500).json({ success: false, error: String(err) });
     }
   }
@@ -133,17 +132,16 @@ class McpCallbackController {
         });
       }
 
-      console.log(
-        `\n🏁 MCP job ${jobId} complete | action=${actionType} | outcome=${outcome}`,
+      log.section(
+        "🏁",
+        `MCP recovery job complete`,
+        `jobId=${jobId} | action=${actionType} | outcome=${outcome}`,
       );
       if (agentReasoning) {
-        console.log(`   AI's reasoning: ${agentReasoning}`);
-      }
-      if (notificationContent) {
-        console.log(`   Notification content:\n${notificationContent}`);
+        log.step(`Agent reasoning: ${agentReasoning}`);
       }
     } catch (err) {
-      console.error("Error updating merchant DB after job complete:", err);
+      log.error("Could not update merchant DB after MCP job completion", err);
     }
   }
 }
@@ -157,7 +155,7 @@ async function postToolResult(jobId: string, result: Record<string, unknown>) {
       signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
-    console.error(`❌ Failed to post tool result for job ${jobId}:`, err);
+    log.error(`Failed to post tool result for job ${jobId} back to MCP Server`, err);
   }
 }
 

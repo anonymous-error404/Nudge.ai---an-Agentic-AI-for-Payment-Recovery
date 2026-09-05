@@ -4,6 +4,7 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
+    "rootDir": "..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -13,6 +14,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src/**/*", "mcp-client/**/*", "payment-gateway-simulator/**/*"],
+  "include": ["src/**/*", "mcp-client/**/*", "payment-gateway-simulator/**/*", "../shared/**/*"],
   "exclude": ["node_modules", "dist", "prisma"]
 }

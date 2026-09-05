@@ -1,13 +1,14 @@
-import { prisma } from "../lib/prismaClient";
+﻿import { prisma } from "../lib/prismaClient";
 import { recoveryQueue } from "../queue/jobQueue";
 import { FailureContext } from "../types";
+import { log, toIST } from '../../../shared/logger';
 
 export function startFollowUpPoller() {
-  const POLL_INTERVAL = 30 * 1000; // 30 seconds for testing (was 5 mins)
+  const POLL_INTERVAL = 30 * 1000; // 30 seconds
 
   setInterval(async () => {
     try {
-      console.log("🕒 [Cron] Checking for due follow-ups...");
+      log.info("🕒", "Checking database for any due follow-up jobs...");
 
       const dueSchedules = await prisma.followUpSchedule.findMany({
         where: {
@@ -20,11 +21,11 @@ export function startFollowUpPoller() {
       });
 
       if (dueSchedules.length === 0) {
-        console.log("   ↳ No due follow-ups found at this time.");
+        log.step("No follow-ups are due right now. Will check again in 30s.");
         return;
       }
 
-      console.log(`🕒 [Cron] Found ${dueSchedules.length} due follow-ups. Queuing jobs...`);
+      log.info("🚀", `Found ${dueSchedules.length} due follow-up(s) — queuing jobs now`);
 
       for (const schedule of dueSchedules) {
         // Mark as IN_PROGRESS immediately to prevent duplicate queueing on next tick
@@ -40,7 +41,6 @@ export function startFollowUpPoller() {
           failureEventId: schedule.failureEvent.id,
           isFollowUp: true,
           followUpScheduleId: schedule.id,
-          // We provide a dummy context that the worker MUST refresh before passing to the AI
           context: {
             failure_event_id: schedule.failureEvent.externalRef,
             customer_id: "unknown",
@@ -54,12 +54,13 @@ export function startFollowUpPoller() {
             previous_actions: [],
             order_details: null,
           } as FailureContext,
-          toolSchemas: [], // Worker will attach schemas
+          toolSchemas: [],
         });
+
+        log.step(`Follow-up job queued for failure event: ${schedule.failureEvent.externalRef}`);
       }
     } catch (error) {
-      console.error("❌ [Cron] Error polling follow-ups:", error);
+      log.error("Follow-up poller encountered an error", error);
     }
   }, POLL_INTERVAL);
 }
-

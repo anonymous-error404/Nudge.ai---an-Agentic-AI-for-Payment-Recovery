@@ -3,12 +3,12 @@
  *
  * Creates:
  *  - 5 customers
- *  - 5 products
- *  - 10 orders (mix of paid + failed)
+ *  - 8 products
+ *  - 7 orders (2 paid + 5 failed)
  *  - 5 pre-seeded failed payments covering all 5 failure categories
- *  - 5 failure_events (one per failed payment)
+ *  - 5 failure_events (2 pending, 3 escalated with full recovery chains)
  *
- * These pre-seeded failures are ready for the AI recovery agent to pick up.
+ * These pre-seeded failures are ready for the AI recovery agent and admin dashboard demo.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -86,7 +86,7 @@ async function main() {
         id: "prod_001",
         name: "Wireless Noise-Cancelling Headphones",
         description: "Premium over-ear headphones with 30hr battery life and active noise cancellation.",
-        price: 799900, // ₹7,999
+        price: 799900,
         imageUrl: "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=800&auto=format&fit=crop",
         stock: 50,
         offers: "Free carrying case worth ₹499 on purchase today!",
@@ -102,7 +102,7 @@ async function main() {
         id: "prod_002",
         name: "Mechanical Gaming Keyboard",
         description: "RGB backlit mechanical keyboard with tactile switches and anti-ghosting.",
-        price: 349900, // ₹3,499
+        price: 349900,
         imageUrl: "https://images.unsplash.com/photo-1595225476474-87563907a212?q=80&w=800&auto=format&fit=crop",
         stock: 30,
         offers: "10% off on UPI payments — save ₹350!",
@@ -118,7 +118,7 @@ async function main() {
         id: "prod_003",
         name: "Smart Watch Pro",
         description: "Health monitoring smartwatch with GPS, SpO2, and 7-day battery.",
-        price: 1299900, // ₹12,999
+        price: 1299900,
         imageUrl: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?q=80&w=800&auto=format&fit=crop",
         stock: 25,
         offers: "Free 1-year extended warranty (worth ₹1,299) included!",
@@ -134,7 +134,7 @@ async function main() {
         id: "prod_004",
         name: "USB-C Hub 7-in-1",
         description: "Multi-port hub with HDMI, USB 3.0, SD card, and 100W PD charging.",
-        price: 149900, // ₹1,499
+        price: 149900,
         imageUrl: "https://images.unsplash.com/photo-1621330396173-e41b1cafd17f?q=80&w=800&auto=format&fit=crop",
         stock: 100,
         offers: "Buy 2 get 15% off — perfect for home + office setup!",
@@ -150,7 +150,7 @@ async function main() {
         id: "prod_005",
         name: "Portable SSD 1TB",
         description: "Ultra-fast portable SSD with 1050MB/s read speeds and shock resistance.",
-        price: 599900, // ₹5,999
+        price: 599900,
         imageUrl: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?q=80&w=800&auto=format&fit=crop",
         stock: 40,
         offers: "Limited time: free USB-C cable (₹299 value) with every order!",
@@ -166,7 +166,7 @@ async function main() {
         id: "prod_006",
         name: "Laptop Stand Aluminium",
         description: "Ergonomic aluminium laptop stand, adjustable height, compatible with all 10-17 inch laptops.",
-        price: 249900, // ₹2,499
+        price: 249900,
         imageUrl: "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?q=80&w=800&auto=format&fit=crop",
         stock: 60,
         offers: "Free 2-year accidental damage protection included!",
@@ -182,7 +182,7 @@ async function main() {
         id: "prod_007",
         name: "Wireless Ergonomic Mouse",
         description: "Precision wireless mouse with ergonomic design, 90-day battery life, and silent clicks.",
-        price: 199900, // ₹1,999
+        price: 199900,
         imageUrl: "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?q=80&w=800&auto=format&fit=crop",
         stock: 80,
         offers: "Buy with any keyboard - get 10% off at checkout!",
@@ -198,7 +198,7 @@ async function main() {
         id: "prod_008",
         name: "True Wireless Earbuds Pro",
         description: "ANC earbuds with 32hr total battery, IPX5 water resistance, and crystal-clear calls.",
-        price: 399900, // ₹3,999
+        price: 399900,
         imageUrl: "https://images.unsplash.com/photo-1606400082777-ef05f3c5cde2?q=80&w=800&auto=format&fit=crop",
         stock: 45,
         offers: "Flat Rs.500 off on orders above Rs.3,999 - use code TECH500!",
@@ -261,10 +261,12 @@ async function main() {
 
   console.log("✅ Created 2 successful orders");
 
-  // ─── Failed orders — 5 failure categories ───────────────────────────────────
+  // ─── Failed orders (5 events) ───────────────────────────────────
+  
+  const now = Date.now();
 
   // 1. INSUFFICIENT_FUNDS — Customer: Arjun, Product: SSD
-  //    Recovery posture: Delayed retry (payday-aware) + suggest alt. method
+  //    ESCALATED: Max attempts reached over several days.
   const failOrder1 = await prisma.order.upsert({
     where: { id: "order_fail_001" },
     update: {},
@@ -290,22 +292,40 @@ async function main() {
       errorReason: "payment_failed",
       errorSource: "customer",
       errorStep: "payment_authentication",
-      errorDescription: "Your payment failed because of insufficient funds. Please try again with another payment method.",
+      errorDescription: "[ESCALATED] Your payment failed because of insufficient funds. Please try again with another payment method.",
     },
   });
-  await prisma.failureEvent.upsert({
+  const fe001 = await prisma.failureEvent.upsert({
     where: { id: "fe_001" },
-    update: {},
+    update: { status: "escalated" },
     create: {
       id: "fe_001",
       paymentId: failPay1.id,
       classifiedCategory: "insufficient_funds",
-      rootCause: "Customer UPI account had insufficient balance at time of debit. Razorpay error_reason=payment_failed, error_source=customer.",
+      rootCause: "Customer UPI account had insufficient balance. Multiple recovery attempts failed over 10 days. Escalated for human review.",
+      status: "escalated"
     },
   });
+  // Actions for fe_001
+  const actions1 = [
+    { id: "ra_001_01", actionType: "send_notification", channel: "sms", attempt: 1, reasoning: "Immediate follow up via SMS.", delayDays: 10 },
+    { id: "ra_001_02", actionType: "send_notification", channel: "email", attempt: 2, reasoning: "Payday follow up email.", delayDays: 7 },
+    { id: "ra_001_03", actionType: "send_notification", channel: "email", attempt: 3, reasoning: "Final discount reminder.", delayDays: 3 },
+    { id: "ra_001_04", actionType: "escalate_to_human", channel: null, attempt: 4, reasoning: "Max recovery attempts reached. Escalating to human for manual outreach.", delayDays: 1 }
+  ];
+  for (const act of actions1) {
+    await prisma.recoveryAction.upsert({
+      where: { id: act.id },
+      update: {},
+      create: {
+        id: act.id, failureEventId: fe001.id, actionType: act.actionType, channel: act.channel, outcome: "success",
+        attemptNumber: act.attempt, agentReasoning: act.reasoning, executedAt: new Date(now - act.delayDays * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
 
   // 2. WRONG_PIN — Customer: Priya, Product: Keyboard
-  //    Recovery posture: Immediate retry prompt
+  //    PENDING: Ready for agent to pick up
   const failOrder2 = await prisma.order.upsert({
     where: { id: "order_fail_002" },
     update: {},
@@ -346,7 +366,7 @@ async function main() {
   });
 
   // 3. ABANDONED — Customer: Ravi, Product: Smartwatch
-  //    Recovery posture: Cart-abandonment nudge
+  //    PENDING: Cart-abandonment nudge
   const failOrder3 = await prisma.order.upsert({
     where: { id: "order_fail_003" },
     update: {},
@@ -387,7 +407,7 @@ async function main() {
   });
 
   // 4. DO_NOT_HONOR — Customer: Sneha, Product: Headphones
-  //    Recovery posture: Short-delay retry then suggest alt. method
+  //    ESCALATED: Customer bank consistently returns do not honor
   const failOrder4 = await prisma.order.upsert({
     where: { id: "order_fail_004" },
     update: {},
@@ -413,22 +433,39 @@ async function main() {
       errorReason: "payment_failed",
       errorSource: "bank",
       errorStep: "payment_authorization",
-      errorDescription: "Your payment was declined by the bank. Please try again or use a different payment method.",
+      errorDescription: "[ESCALATED] Your payment was declined by the bank. Please try again or use a different payment method.",
     },
   });
-  await prisma.failureEvent.upsert({
+  const fe004 = await prisma.failureEvent.upsert({
     where: { id: "fe_004" },
-    update: {},
+    update: { status: "escalated" },
     create: {
       id: "fe_004",
       paymentId: failPay4.id,
       classifiedCategory: "do_not_honor",
-      rootCause: "Issuing bank returned generic Do Not Honor decline (error_source=bank, error_step=payment_authorization). Short-delay retry appropriate before suggesting alt. method.",
+      rootCause: "Issuing bank returned generic Do Not Honor decline. Recovery exhausted.",
+      status: "escalated"
     },
   });
+  // Actions for fe_004
+  const actions4 = [
+    { id: "ra_004_01", actionType: "send_notification", channel: "email", attempt: 1, reasoning: "Initial email proposing alternative payment link.", delayDays: 2 },
+    { id: "ra_004_02", actionType: "send_notification", channel: "email", attempt: 2, reasoning: "Follow up email proposing alternative payment link.", delayDays: 1 },
+    { id: "ra_004_03", actionType: "escalate_to_human", channel: null, attempt: 3, reasoning: "Bank consistently declines. Escalate to merchant support to reach out personally.", delayDays: 0.1 }
+  ];
+  for (const act of actions4) {
+    await prisma.recoveryAction.upsert({
+      where: { id: act.id },
+      update: {},
+      create: {
+        id: act.id, failureEventId: fe004.id, actionType: act.actionType, channel: act.channel, outcome: "success",
+        attemptNumber: act.attempt, agentReasoning: act.reasoning, executedAt: new Date(now - act.delayDays * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
 
   // 5. PSP_TIMEOUT — Customer: Vikram, Product: USB Hub
-  //    Recovery posture: Safe to auto-retry (status check first)
+  //    ESCALATED: Needs manual reconciliation
   const failOrder5 = await prisma.order.upsert({
     where: { id: "order_fail_005" },
     update: {},
@@ -454,33 +491,56 @@ async function main() {
       errorReason: "payment_failed",
       errorSource: "gateway",
       errorStep: "payment_authorization",
-      errorDescription: "Payment failed due to a timeout between the payment gateway and bank. Please try again.",
+      errorDescription: "[ESCALATED] Payment failed due to a timeout between the payment gateway and bank. Manual reconciliation required.",
     },
   });
-  await prisma.failureEvent.upsert({
+  const fe005 = await prisma.failureEvent.upsert({
     where: { id: "fe_005" },
-    update: {},
+    update: { status: "escalated" },
     create: {
       id: "fe_005",
       paymentId: failPay5.id,
       classifiedCategory: "psp_timeout",
-      rootCause: "Multi-hop PSP-NPCI-bank timeout (error_source=gateway). Reconciliation via Payment Fetch API required before retry to prevent double-charge.",
+      rootCause: "Multi-hop PSP-NPCI-bank timeout (error_source=gateway). Status unknown.",
+      status: "escalated"
     },
   });
+  // Actions for fe_005
+  const actions5 = [
+    { id: "ra_005_01", actionType: "do_nothing", channel: null, attempt: 1, reasoning: "Reconciliation period (waiting for PSP response).", delayDays: 1 },
+    { id: "ra_005_02", actionType: "escalate_to_human", channel: null, attempt: 2, reasoning: "Gateway status remains ambiguous. Escalate for manual intervention to avoid double-charging the customer.", delayDays: 0.1 }
+  ];
+  for (const act of actions5) {
+    await prisma.recoveryAction.upsert({
+      where: { id: act.id },
+      update: {},
+      create: {
+        id: act.id, failureEventId: fe005.id, actionType: act.actionType, channel: act.channel, outcome: "success",
+        attemptNumber: act.attempt, agentReasoning: act.reasoning, executedAt: new Date(now - act.delayDays * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
 
-  console.log("✅ Created 5 failed orders with failure_events");
+  console.log("✅ Created 5 failed orders (3 escalated, 2 pending)");
+
+  // Clean up any extra seed events (like fe_006, fe_007) if they exist from previous runs
+  await prisma.recoveryAction.deleteMany({ where: { failureEventId: { in: ["fe_006", "fe_007"] } } }).catch(() => {});
+  await prisma.failureEvent.deleteMany({ where: { id: { in: ["fe_006", "fe_007"] } } }).catch(() => {});
+  await prisma.payment.deleteMany({ where: { id: { in: ["pay_fail_006", "pay_fail_007"] } } }).catch(() => {});
+  await prisma.order.deleteMany({ where: { id: { in: ["order_fail_006", "order_fail_007"] } } }).catch(() => {});
+
   console.log("\n📊 Seed summary:");
   console.log("   Customers:      5");
-  console.log("   Products:       5");
+  console.log("   Products:       8");
   console.log("   Orders:         7 (2 paid, 5 failed)");
   console.log("   Payments:       7 (2 captured, 5 failed)");
-  console.log("   Failure events: 5");
+  console.log("   Failure events: 5 (2 pending, 3 escalated)");
   console.log("\n🔍 Failure categories seeded:");
-  console.log("   1. insufficient_funds  → Delayed retry + alt. method");
-  console.log("   2. wrong_pin           → Immediate retry prompt");
-  console.log("   3. abandoned           → Cart-abandonment nudge");
-  console.log("   4. do_not_honor        → Short-delay retry → alt. method");
-  console.log("   5. psp_timeout         → Reconcile first, then auto-retry");
+  console.log("   1. insufficient_funds  → ESCALATED (Arjun — Max attempts reached)");
+  console.log("   2. wrong_pin           → PENDING   (Priya — Ready for AI agent)");
+  console.log("   3. abandoned           → PENDING   (Ravi — Ready for AI agent)");
+  console.log("   4. do_not_honor        → ESCALATED (Sneha — Bank decline max retries)");
+  console.log("   5. psp_timeout         → ESCALATED (Vikram — Manual recon needed)");
   console.log("\n✨ Database seeded successfully!");
 }
 

@@ -1,8 +1,4 @@
-/**
- * do_nothing tool
- * Explicitly records that no recovery action should be taken.
- * Forces AI to make an active choice rather than falling silent.
- */
+﻿import { log } from '../../../../shared/logger';
 
 export const doNothingSchema = {
   type: "function" as const,
@@ -33,8 +29,7 @@ export async function executeDoNothing(args: {
   payment_id: string;
   reason: string;
 }): Promise<{ success: boolean; message: string }> {
-  console.log(`\n🚫 [DO_NOTHING] No recovery for payment ${args.payment_id}`);
-  console.log(`   Reason: ${args.reason}`);
+  log.section("🚫", "No recovery action taken (do_nothing)", `Reason: ${args.reason}`);
   return { success: true, message: `No action taken: ${args.reason}` };
 }
 
