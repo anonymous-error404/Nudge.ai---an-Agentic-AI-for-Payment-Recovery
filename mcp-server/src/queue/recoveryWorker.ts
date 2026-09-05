@@ -1,4 +1,4 @@
-﻿import { Worker, Job } from "bullmq";
+import { Worker, Job } from "bullmq";
 import { recoveryQueue, redisConnection } from "./jobQueue";
 import { RecoveryJobPayload } from "../types";
 import { recoveryActionRepo } from "../repositories/recoveryActionRepo";
@@ -110,6 +110,10 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
                 type: "string",
                 description: "Exact product name",
               },
+              product_offer: {
+                type: "string",
+                description: "Any active product offer or discount code you found in context",
+              },
               amount: {
                 type: "number",
                 description: "Exact amount in INR (not paise)",
@@ -133,7 +137,8 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
             nextExecutionAt,
           },
         });
-        log.scheduled("Follow-up job scheduled by AI agent", nextExecutionAt);
+        const agentName = isImmediateRecovery ? "The Strategist" : "The Tracker";
+        log.scheduled(`Follow-up job scheduled by ${agentName}`, nextExecutionAt);
         return {
           success: true,
           message: `Next follow-up scheduled at ${toIST(nextExecutionAt)} (IST)`,
@@ -150,9 +155,9 @@ async function processRecoveryJob(job: Job<RecoveryJobPayload>) {
                 product_name: args.product_name,
                 amount_rupees: args.amount,
                 currency: "INR",
-                product_offer: context.order_details?.product_offer ?? undefined,
+                product_offer: args.product_offer || context.order_details?.product_offer ?? undefined,
               }
-            : context.order_details ? { ...context.order_details, product_offer: context.order_details.product_offer ?? undefined } : null;
+            : context.order_details ? { ...context.order_details, product_offer: args.product_offer || context.order_details.product_offer ?? undefined } : null;
 
         const copy = await runNotificationWriterAgent({
           failureCategory: context.failure_category,

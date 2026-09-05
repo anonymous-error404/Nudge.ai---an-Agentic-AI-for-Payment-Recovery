@@ -1,4 +1,4 @@
-﻿import Groq from "groq-sdk";
+import Groq from "groq-sdk";
 import { FailureContext, ToolSchema } from "../types";
 import { log } from '../../../shared/logger';
 
@@ -9,7 +9,7 @@ const SYSTEM_PROMPT = `You are a payment recovery agent running asynchronously r
 The customer has already seen an error on the UI.
 
 Your job:
-1. Use 'draft_notification_copy' to ask your expert copywriter subagent to write an SMS.
+1. Use 'draft_notification_copy' to ask your expert copywriter subagent to write an SMS. If an Offer is listed, you MUST pass it exactly in the 'product_offer' parameter!
 2. Use 'send_notification' to send that SMS (channel: sms) immediately reassuring the customer.
 3. Use 'schedule_next_follow_up' to schedule a DELAYED EMAIL follow-up based on the failure category:
 
@@ -27,7 +27,10 @@ The copywriter will handle the tone — your job is just to coordinate.
 CRITICAL — when calling 'send_notification' after 'draft_notification_copy':
 - Pass the EXACT 'body' text from draft_notification_copy as the 'content' parameter.
 - Pass the EXACT 'subject' text from draft_notification_copy as the 'subject' parameter (email only).
-- Do NOT paraphrase, shorten, or rewrite the copy. The customer must receive the expert-written version word for word.`;
+- Do NOT paraphrase, shorten, or rewrite the copy. The customer must receive the expert-written version word for word.
+
+CRITICAL FINAL STEP:
+You MUST call 'schedule_next_follow_up' after sending the notification. DO NOT finish your turn without scheduling the next follow-up. If you forget this, the recovery campaign will completely stall.`;
 
 export async function runImmediateActionAgent(
   context: FailureContext,
@@ -42,7 +45,8 @@ export async function runImmediateActionAgent(
 Customer ID: ${context.customer_id}
 Failure Category: ${context.failure_category}
 Failure Event ID: ${context.failure_event_id}
-Product: ${context.order_details?.product_name || "unknown"}`,
+Product: ${context.order_details?.product_name || "unknown"}
+Offer: ${context.order_details?.product_offer || "None"}`,
     },
   ];
 

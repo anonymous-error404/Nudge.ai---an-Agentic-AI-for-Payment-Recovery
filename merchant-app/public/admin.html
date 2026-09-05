@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/style.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     html,body{height:100%;margin:0;overflow:hidden;}
     body{display:flex;flex-direction:column;background:var(--bg);}
@@ -677,12 +678,7 @@ function addMessageToUI(sender, text){
         </div>
       </div>`;
   } else {
-    // Parse markdown minimally (bold and codeblocks)
-    let parsed = text;
-    parsed = parsed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    parsed = parsed.replace(/`(.*?)`/g, '<code style="background:rgba(255,255,255,.1);padding:.1rem .3rem;border-radius:4px;">$1</code>');
-    parsed = parsed.replace(/\n/g, '<br>');
-    parsed = linkify(parsed);
+    let parsed = window.marked ? window.marked.parse(text) : linkify(text.replace(/\n/g, '<br>'));
     
     div.innerHTML = `
       <div class="chat-msg-inner ai">
@@ -726,27 +722,73 @@ async function sendChatMessage(){
   inp.style.height = 'auto';
   document.getElementById('chat-send').disabled = true;
   document.getElementById('chat-welcome').style.display = 'none';
-  document.getElementById('chat-suggestions').style.display = 'none';
+
   
   addMessageToUI('user', text);
   showTyping();
   
-  try{
-    const res = await fetch('/api/chat', {
+  try {
+    const res = await fetch('/api/admin/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ message: text })
     });
     const data = await res.json();
-    document.getElementById('typing-indicator').remove();
-    addMessageToUI('ai', data.reply);
-  }catch(e){
-    document.getElementById('typing-indicator').remove();
+    
+    document.getElementById('typing-indicator')?.remove();
+    
+    if (!data.success) {
+      addMessageToUI('ai', "Error: " + data.error);
+      document.getElementById('chat-send').disabled = false;
+      inp.focus();
+      return;
+    }
+    
+    const sessionId = data.sessionId;
+    const wrap = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'chat-msg-wrap';
+    div.innerHTML = `
+      <div class="chat-msg-inner ai">
+        <div class="msg-avatar ai-av"><i data-lucide="bot" style="width:18px;height:18px;"></i></div>
+        <div class="msg-body">
+          <div class="msg-name">The Analyst</div>
+          <div class="msg-bubble" id="ai-response-${sessionId}"></div>
+        </div>
+      </div>`;
+    wrap.appendChild(div);
+    lucide.createIcons();
+    
+    const bubble = document.getElementById(`ai-response-${sessionId}`);
+    const evtSource = new EventSource(`/api/admin/chat/stream/${sessionId}`);
+    let fullText = "";
+    
+    evtSource.onmessage = function(event) {
+      const parsed = JSON.parse(event.data);
+      if (parsed.type === 'delta') {
+        fullText += parsed.content;
+        let display = window.marked ? window.marked.parse(fullText) : fullText.replace(/\n/g, '<br>');
+        bubble.innerHTML = display;
+        wrap.scrollTop = wrap.scrollHeight;
+      } else if (parsed.type === 'done' || parsed.type === 'error') {
+        evtSource.close();
+        document.getElementById('chat-send').disabled = false;
+        inp.focus();
+      }
+    };
+    
+    evtSource.onerror = function() {
+      evtSource.close();
+      document.getElementById('chat-send').disabled = false;
+      inp.focus();
+    };
+
+  } catch(e) {
+    document.getElementById('typing-indicator')?.remove();
     addMessageToUI('ai', "Sorry, I'm having trouble connecting to the analytics engine right now.");
+    document.getElementById('chat-send').disabled = false;
+    inp.focus();
   }
-  
-  document.getElementById('chat-send').disabled = false;
-  inp.focus();
 }
 
 lucide.createIcons();

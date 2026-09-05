@@ -1,4 +1,4 @@
-﻿import Groq from "groq-sdk";
+import Groq from "groq-sdk";
 import { FailureContext, ToolSchema } from "../types";
 import { log } from '../../../shared/logger';
 
@@ -16,7 +16,7 @@ Your workflow:
    - If AT OR ABOVE 7 attempts → call 'escalate_to_human' instead of sending another notification.
    - Keep increasing the delay between follow-ups as attempts grow (e.g. attempt 2: a few hours, attempt 3: 1 day, attempt 4: 3 days, attempt 5: 1 week, etc.)
 4. If below max attempts:
-   a. Use 'draft_notification_copy' to write a persuasive follow-up EMAIL. Instruct the copywriter it's a follow-up (attempt #N) so they vary the wording.
+   a. Use 'draft_notification_copy' to write a persuasive follow-up EMAIL. Instruct the copywriter it's a follow-up (attempt #N) so they vary the wording. IF query_failure_context returned a product_offer, you MUST pass it to draft_notification_copy!
    b. Use 'send_notification' to send the email.
    c. Decide whether to schedule another follow-up (use 'schedule_next_follow_up' if warranted).
 
